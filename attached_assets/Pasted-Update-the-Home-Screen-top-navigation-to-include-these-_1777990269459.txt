@@ -1,0 +1,129 @@
+Update the Home Screen top navigation to include these clickable and swipeable sections:
+
+- Profile
+- Doctors
+- Hospitals
+- Labs
+- Pharmacy
+- Education
+- Search icon
+
+Each section should have a clean icon and label.
+
+Users should be able to:
+1. Tap any section to open it.
+2. Swipe left or right between Home, Profile, Doctors, Hospitals, Labs, Pharmacy, and Education.
+
+Create new screens for Hospitals, Labs, and Pharmacy.
+
+HOSPITALS SCREEN:
+- Show hospital cards.
+- Each hospital card should include:
+  - Hospital image or icon
+  - Hospital name
+  - Location
+  - Type: general hospital, private clinic, teaching hospital, specialist hospital
+  - Opening hours
+  - Services offered
+  - “View Details” button
+  - “Get Directions” button placeholder
+- Hospital details page should show more information and a “Book Appointment” button.
+
+LABS SCREEN:
+- Show lab cards.
+- Each lab card should include:
+  - Lab image or icon
+  - Lab name
+  - Location
+  - Available tests
+  - Opening hours
+  - Price range placeholder
+  - “Book Test” button
+- Lab details page should show available tests like malaria test, full blood count, blood sugar test, typhoid test, pregnancy test, genotype test, and urinalysis.
+
+PHARMACY SCREEN:
+- Show pharmacy cards.
+- Each pharmacy card should include:
+  - Pharmacy image or icon
+  - Pharmacy name
+  - Location
+  - Opening hours
+  - Verification status
+  - “Upload Prescription” button placeholder
+  - “View Medicines” button
+- Add a safety note that medicines should only be taken according to professional medical advice or prescription.
+
+BACKEND ADDITIONS:
+Create Mongoose models and API routes for Hospitals, Labs, and Pharmacies.
+
+Hospital model:
+- name
+- location
+- type
+- services
+- openingHours
+- image
+- contact
+- createdAt
+
+Lab model:
+- name
+- location
+- availableTests
+- openingHours
+- priceRange
+- image
+- contact
+- createdAt
+
+Pharmacy model:
+- name
+- location
+- openingHours
+- isVerified
+- image
+- contact
+- createdAt
+
+API routes:
+- GET /api/hospitals
+- GET /api/hospitals/:id
+- POST /api/hospitals for admin only
+- PUT /api/hospitals/:id for admin only
+- DELETE /api/hospitals/:id for admin only
+
+- GET /api/labs
+- GET /api/labs/:id
+- POST /api/labs for admin only
+- PUT /api/labs/:id for admin only
+- DELETE /api/labs/:id for admin only
+
+- GET /api/pharmacies
+- GET /api/pharmacies/:id
+- POST /api/pharmacies for admin only
+- PUT /api/pharmacies/:id for admin only
+- DELETE /api/pharmacies/:id for admin only
+
+ADMIN FEATURES:
+Admin should be able to add, edit, and delete doctors, hospitals, labs, pharmacies, and education posts.
+
+SEARCH FEATURE:
+Update search so users can search across:
+- doctors
+- hospitals
+- labs
+- pharmacies
+- education posts
+- chat history
+
+DESIGN:
+Use simple modern healthcare icons for each section:
+- Profile icon
+- Doctor icon
+- Hospital icon
+- Lab/test tube icon
+- Pharmacy/medicine icon
+- Education/book or video icon
+- Search icon
+
+Keep the colors white, green, blue, and purple. Use green as the main color, blue and purple as accents, and white for cards and chat spaces.

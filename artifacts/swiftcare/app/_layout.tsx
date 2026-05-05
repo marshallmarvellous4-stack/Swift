@@ -45,6 +45,18 @@ function RootLayoutNav() {
         name="search"
         options={{ headerShown: false, presentation: "card" }}
       />
+      <Stack.Screen
+        name="hospital/[id]"
+        options={{ headerShown: false, presentation: "card" }}
+      />
+      <Stack.Screen
+        name="lab/[id]"
+        options={{ headerShown: false, presentation: "card" }}
+      />
+      <Stack.Screen
+        name="pharmacy/[id]"
+        options={{ headerShown: false, presentation: "card" }}
+      />
     </Stack>
   );
 }
