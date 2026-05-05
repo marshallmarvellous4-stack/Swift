@@ -456,7 +456,6 @@ export default function HomeScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <HomeNavBar activeIndex={activeIndex} onPress={scrollToSection} />
       <ScrollView
         ref={scrollRef}
         horizontal
@@ -478,6 +477,7 @@ export default function HomeScreen() {
           </View>
         ))}
       </ScrollView>
+      <HomeNavBar activeIndex={activeIndex} onPress={scrollToSection} />
     </View>
   );
 }

@@ -20,13 +20,13 @@ export interface NavSection {
 }
 
 export const NAV_SECTIONS: NavSection[] = [
-  { key: "chat", label: "Home", icon: "home-outline", activeIcon: "home" },
-  { key: "profile", label: "Profile", icon: "person-outline", activeIcon: "person" },
-  { key: "doctors", label: "Doctors", icon: "medkit-outline", activeIcon: "medkit" },
-  { key: "hospitals", label: "Hospitals", icon: "business-outline", activeIcon: "business" },
-  { key: "labs", label: "Labs", icon: "flask-outline", activeIcon: "flask" },
-  { key: "pharmacy", label: "Pharmacy", icon: "medical-outline", activeIcon: "medical" },
-  { key: "education", label: "Learn", icon: "book-outline", activeIcon: "book" },
+  { key: "chat",      label: "Home",     icon: "home-outline",    activeIcon: "home" },
+  { key: "profile",   label: "Profile",  icon: "person-outline",  activeIcon: "person" },
+  { key: "doctors",   label: "Doctors",  icon: "medkit-outline",  activeIcon: "medkit" },
+  { key: "hospitals", label: "Hospitals",icon: "business-outline",activeIcon: "business" },
+  { key: "labs",      label: "Labs",     icon: "flask-outline",   activeIcon: "flask" },
+  { key: "pharmacy",  label: "Pharmacy", icon: "medical-outline", activeIcon: "medical" },
+  { key: "education", label: "Learn",    icon: "book-outline",    activeIcon: "book" },
 ];
 
 interface HomeNavBarProps {
@@ -41,10 +41,12 @@ export function HomeNavBar({ activeIndex, onPress }: HomeNavBarProps) {
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
-    const ITEM_WIDTH = 72;
+    const ITEM_WIDTH = 64;
     const offset = Math.max(0, activeIndex * ITEM_WIDTH - ITEM_WIDTH);
     scrollRef.current?.scrollTo({ x: offset, animated: true });
   }, [activeIndex]);
+
+  const bottomPad = insets.bottom + (Platform.OS === "web" ? 34 : 0);
 
   return (
     <View
@@ -52,8 +54,8 @@ export function HomeNavBar({ activeIndex, onPress }: HomeNavBarProps) {
         styles.container,
         {
           backgroundColor: colors.card,
-          borderBottomColor: colors.border,
-          paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0) + 6,
+          borderTopColor: colors.border,
+          paddingBottom: bottomPad,
         },
       ]}
     >
@@ -69,15 +71,23 @@ export function HomeNavBar({ activeIndex, onPress }: HomeNavBarProps) {
           return (
             <Pressable
               key={section.key}
-              style={styles.navItem}
+              style={styles.tabItem}
               onPress={() => onPress(index)}
             >
+              {isActive && (
+                <View
+                  style={[
+                    styles.activeBar,
+                    { backgroundColor: colors.primary },
+                  ]}
+                />
+              )}
               <View
                 style={[
                   styles.iconWrap,
                   {
                     backgroundColor: isActive
-                      ? colors.primary + "18"
+                      ? colors.primary + "15"
                       : "transparent",
                   },
                 ]}
@@ -88,7 +98,7 @@ export function HomeNavBar({ activeIndex, onPress }: HomeNavBarProps) {
                       ? (section.activeIcon as never)
                       : (section.icon as never)
                   }
-                  size={22}
+                  size={23}
                   color={isActive ? colors.primary : colors.mutedForeground}
                 />
               </View>
@@ -98,35 +108,36 @@ export function HomeNavBar({ activeIndex, onPress }: HomeNavBarProps) {
                   {
                     color: isActive ? colors.primary : colors.mutedForeground,
                     fontWeight: isActive ? "700" : "400",
+                    fontFamily: isActive ? "Inter_700Bold" : "Inter_400Regular",
                   },
                 ]}
+                numberOfLines={1}
               >
                 {section.label}
               </Text>
-              {isActive && (
-                <View
-                  style={[
-                    styles.activeIndicator,
-                    { backgroundColor: colors.primary },
-                  ]}
-                />
-              )}
             </Pressable>
           );
         })}
       </ScrollView>
 
+      <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
       <Pressable
         style={({ pressed }) => [
-          styles.searchBtn,
+          styles.searchTab,
           {
-            backgroundColor: colors.primary + "12",
             opacity: pressed ? 0.7 : 1,
+            borderLeftColor: colors.border,
           },
         ]}
         onPress={() => router.push("/search" as never)}
       >
-        <Ionicons name="search" size={20} color={colors.primary} />
+        <View style={[styles.iconWrap, { backgroundColor: colors.primary + "15" }]}>
+          <Ionicons name="search" size={23} color={colors.primary} />
+        </View>
+        <Text style={[styles.label, { color: colors.primary, fontFamily: "Inter_600SemiBold", fontWeight: "600" }]}>
+          Search
+        </Text>
       </Pressable>
     </View>
   );
@@ -135,52 +146,51 @@ export function HomeNavBar({ activeIndex, onPress }: HomeNavBarProps) {
 const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
-    alignItems: "flex-end",
-    borderBottomWidth: 1,
-    paddingBottom: 0,
+    alignItems: "flex-start",
+    borderTopWidth: 1,
+    paddingTop: 8,
   },
   scrollContent: {
-    paddingHorizontal: 8,
-    paddingBottom: 0,
-    gap: 4,
-    alignItems: "flex-start",
+    paddingHorizontal: 4,
+    gap: 2,
   },
-  navItem: {
+  tabItem: {
     alignItems: "center",
-    width: 68,
-    paddingBottom: 6,
-    paddingTop: 2,
+    width: 64,
+    paddingBottom: 4,
     position: "relative",
   },
-  iconWrap: {
-    width: 44,
-    height: 36,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 3,
-  },
-  label: {
-    fontSize: 10,
-    fontFamily: "Inter_400Regular",
-    textAlign: "center",
-  },
-  activeIndicator: {
+  activeBar: {
     position: "absolute",
-    bottom: 0,
+    top: -8,
     left: "20%",
     right: "20%",
     height: 3,
-    borderTopLeftRadius: 3,
-    borderTopRightRadius: 3,
+    borderBottomLeftRadius: 3,
+    borderBottomRightRadius: 3,
   },
-  searchBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  iconWrap: {
+    width: 44,
+    height: 34,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 10,
-    marginBottom: 8,
+    marginBottom: 2,
+  },
+  label: {
+    fontSize: 10,
+    textAlign: "center",
+  },
+  divider: {
+    width: 1,
+    height: 44,
+    marginTop: 4,
+    alignSelf: "center",
+  },
+  searchTab: {
+    alignItems: "center",
+    width: 64,
+    paddingBottom: 4,
+    borderLeftWidth: 0,
   },
 });
