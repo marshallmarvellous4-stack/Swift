@@ -50,7 +50,7 @@ export default function SplashScreen() {
       >
         <Text style={styles.taglineText}>Smarter Health Starts Here.</Text>
         <Text style={styles.subTagline}>
-          AI-assisted healthcare guidance at your fingertips
+          Talk to a medical doctor
         </Text>
       </Animated.View>
 
