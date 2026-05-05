@@ -1,0 +1,247 @@
+Build a full-stack mobile health-tech app called SwiftCare using React Native with Expo for the frontend, Node.js + Express for the backend, MongoDB for the database, and JWT for authentication.
+
+The app should be flexible, clean, modern, and easy to customize later. Use a simple folder structure and write clean, well-commented code.
+
+APP CONCEPT:
+SwiftCare is an AI-assisted healthcare access app where users can describe how they feel, receive safe health guidance, view doctors, read health education content, and manage their profile/history.
+
+IMPORTANT SAFETY RULE:
+The app must not claim to diagnose disease or prescribe medication. The chatbot should give safe general guidance and recommend speaking to a verified doctor for serious symptoms. Add a short disclaimer: “SwiftCare does not replace professional medical advice. For emergencies, visit the nearest hospital immediately.”
+
+FRONTEND REQUIREMENTS:
+Use React Native with Expo.
+
+Use these main colors:
+- White
+- Green
+- Blue
+- Purple
+
+The design should feel like a modern healthcare app: clean, soft, rounded cards, good spacing, and professional UI.
+
+SCREENS NEEDED:
+
+1. Splash Screen
+- When the user opens the app, show the SwiftCare splash screen.
+- Use the SwiftCare logo image if available.
+- Green background with white logo/text.
+- At the bottom of the screen, show a big rounded button: “Get Started”.
+- When the user clicks “Get Started”, take them to the Home screen.
+
+2. Home Screen
+- At the top of the screen, show navigation items:
+  - Profile
+  - Doctors
+  - Education
+  - Search icon
+- Users should be able to click each item to navigate to that section.
+- Users should also be able to swipe left/right between Home, Profile, Doctors, and Education screens.
+- The main body of the Home screen should be a chat space.
+- The chat area background should be white with padding and rounded corners.
+- User messages should appear on the right side.
+- SwiftCare assistant responses should appear on the left side.
+- At the bottom, add a text input where users can type how they feel.
+- Add a send button.
+- Example user input: “I have headache and fever.”
+- The app should respond safely with general advice and ask follow-up questions.
+- Keep the chat logic simple for now, but structure it so I can later connect it to a real AI API.
+
+3. Profile Screen
+- If the user is not logged in, show a Login screen.
+- Login screen should have:
+  - Email input
+  - Password input
+  - Login button
+  - Text/link: “Don’t have an account? Create account”
+- If user clicks create account, take them to the Register screen.
+- If the user is logged in, show:
+  - User profile information
+  - History
+  - Activity
+  - Past chat history
+  - Logout button
+
+4. Register Screen
+- User should be able to create an account with:
+  - Full name
+  - Email
+  - Sex
+  - State of origin
+  - Mobile number
+  - Password
+  - Role/category selection: user, doctor, admin
+- After account creation, show a simple verification success screen or message.
+- After successful registration, take the user to the Home screen.
+- Store user data in MongoDB.
+- Passwords must be hashed securely.
+
+5. Doctors Screen
+- Show different doctors in cards.
+- Each doctor card should include:
+  - Doctor image
+  - Doctor name
+  - Specialty
+  - Years of experience
+  - Location
+  - Availability
+  - “View Details” button
+- Use sample doctor data for now.
+- Doctor details page should show more information and a button like “Book Consultation”.
+- Make it easy to later connect this to real doctors from the database.
+
+6. Education Screen
+- Show health education content and news.
+- Use cards for topics like:
+  - Malaria prevention
+  - Mental health
+  - Nutrition
+  - Vaccination
+  - First aid
+- Include space for videos later.
+- For now, use placeholder images and sample article text.
+
+7. Search
+- Add a search icon at the top.
+- When clicked, open a search screen/modal.
+- User should be able to search doctors, education topics, and previous chat history.
+- Use simple frontend search logic first.
+
+BACKEND REQUIREMENTS:
+Use Node.js and Express.
+
+Create API routes for:
+- User registration
+- User login
+- Get current user profile
+- Save chat message
+- Get chat history
+- Get doctors
+- Get education posts
+
+Use MongoDB with Mongoose.
+
+Use JWT authentication:
+- Generate token on login/register.
+- Protect private routes like profile, chat history, and admin features.
+
+DATABASE MODELS:
+Create Mongoose models for:
+
+1. User
+- fullName
+- email
+- passwordHash
+- sex
+- stateOfOrigin
+- mobileNumber
+- role: user, doctor, admin
+- isVerified
+- createdAt
+
+2. Doctor
+- name
+- email
+- specialty
+- experience
+- location
+- availability
+- image
+- bio
+- createdAt
+
+3. ChatMessage
+- userId
+- message
+- sender: user or assistant
+- createdAt
+
+4. EducationPost
+- title
+- category
+- content
+- image
+- videoUrl
+- createdAt
+
+AUTHENTICATION:
+- Use bcrypt for password hashing.
+- Use jsonwebtoken for JWT.
+- Store JWT securely on the frontend using AsyncStorage for now.
+- Add middleware to protect routes.
+
+CHATBOT LOGIC:
+Create a basic backend route:
+POST /api/chat
+
+It should receive the user’s message and return a safe health response.
+
+For now, use simple keyword-based responses:
+- fever
+- headache
+- malaria
+- cough
+- stomach pain
+- chest pain
+- bleeding
+- pregnancy
+- stress
+
+For serious symptoms like chest pain, difficulty breathing, severe bleeding, fainting, or severe pain, respond with urgent advice:
+“Please seek urgent medical attention or visit the nearest hospital immediately.”
+
+Make the chatbot structure flexible so I can later replace the simple logic with OpenAI, Google Gemini, or another medical AI API.
+
+ADMIN FEATURES:
+Create basic admin logic:
+- Admin can view all users.
+- Admin can add/edit/delete doctors.
+- Admin can add/edit/delete education posts.
+- Protect admin routes so only users with role “admin” can access them.
+
+DOCTOR FEATURES:
+Create basic doctor logic:
+- Doctor can view their profile.
+- Doctor can later view assigned consultations.
+- For now, create the structure but keep it simple.
+
+PROJECT STRUCTURE:
+Create a clean structure like this:
+
+/client
+  /src
+    /screens
+    /components
+    /navigation
+    /context
+    /services
+    /assets
+    /utils
+
+/server
+  /models
+  /routes
+  /controllers
+  /middleware
+  /config
+  server.js
+
+ENVIRONMENT VARIABLES:
+Create .env.example with:
+MONGO_URI=
+JWT_SECRET=
+PORT=5000
+
+FRONTEND STYLE:
+- Use modern rounded buttons.
+- Use cards with soft shadows.
+- Use green as the primary healthcare color.
+- Use blue and purple as accent colors.
+- Use white background for chat space.
+- Make the app mobile-first and responsive.
+- Use reusable components like Button, Header, DoctorCard, ChatBubble, EducationCard.
+
+FINAL REQUIREMENTS:
+- Make sure the app can run in Replit.
+- Give me the commands to install dependencies and run both frontend and backend.
+- Add comments explaining important parts of the code because I am still learning.
+- Keep the app modular so I can easily add payments, real AI, lab booking, pharmacy connection, and video consultation later.

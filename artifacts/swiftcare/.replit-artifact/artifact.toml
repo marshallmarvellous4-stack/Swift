@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/"
+title = "SwiftCare"
+version = "1.0.0"
+id = "artifacts/swiftcare"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+name = "expo"
+paths = [ "/" ]
+localPort = 25211
+
+[services.development]
+run = "pnpm --filter @workspace/swiftcare run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/swiftcare", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/swiftcare", "run", "serve" ]
+
+[services.env]
+PORT = "25211"
+BASE_PATH = "/"
