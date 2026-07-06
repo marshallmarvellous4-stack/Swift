@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "swiftCare",
-    "slug": "swiftcare",
+    "name": "swifthealthCare",
+    "slug": "swifthealthcare",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "swiftcare",
+    "scheme": "swifthealthcare",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {

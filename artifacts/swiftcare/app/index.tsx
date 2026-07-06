@@ -116,6 +116,7 @@ const styles = StyleSheet.create({
   logo: {
     width: width * 0.75,
     height: height * 0.38,
+    borderRadius: 10,
   },
   tagline: {
     alignItems: "center",
