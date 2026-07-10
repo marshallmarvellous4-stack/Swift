@@ -94,7 +94,6 @@ export default function RegisterScreen() {
         paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 32,
         paddingHorizontal: 24,
       }}
-      bottomOffset={60}
     >
       <Pressable
         onPress={() => router.back()}

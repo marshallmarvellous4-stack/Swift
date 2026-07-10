@@ -44,7 +44,7 @@ export default function HospitalDetailScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Alert.alert(
       "Book Appointment",
-      `Book an appointment at ${hospital.name}?\n\nContact: ${hospital.contact}`,
+      `Book an appointment at ${hospital!.name}?\n\nContact: ${hospital!.contact}`,
       [
         { text: "Cancel", style: "cancel" },
         {

@@ -61,7 +61,6 @@ export default function LoginScreen() {
         paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 32,
         paddingHorizontal: 24,
       }}
-      bottomOffset={40}
     >
       <Pressable
         onPress={() => router.back()}
