@@ -76,6 +76,34 @@ function RootLayoutNav() {
         name="consultation/chat"
         options={{ headerShown: false, presentation: "card" }}
       />
+      <Stack.Screen
+        name="profile/health-records"
+        options={{ headerShown: false, presentation: "card" }}
+      />
+      <Stack.Screen
+        name="profile/consultation-history"
+        options={{ headerShown: false, presentation: "card" }}
+      />
+      <Stack.Screen
+        name="profile/appointments"
+        options={{ headerShown: false, presentation: "card" }}
+      />
+      <Stack.Screen
+        name="profile/prescriptions"
+        options={{ headerShown: false, presentation: "card" }}
+      />
+      <Stack.Screen
+        name="profile/lab-results"
+        options={{ headerShown: false, presentation: "card" }}
+      />
+      <Stack.Screen
+        name="profile/settings"
+        options={{ headerShown: false, presentation: "card" }}
+      />
+      <Stack.Screen
+        name="profile/coming-soon"
+        options={{ headerShown: false, presentation: "card" }}
+      />
     </Stack>
   );
 }

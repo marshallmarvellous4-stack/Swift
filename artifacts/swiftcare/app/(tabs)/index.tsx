@@ -23,6 +23,7 @@ import { HospitalCard } from "@/components/HospitalCard";
 import { HomeNavBar, NAV_SECTIONS } from "@/components/HomeNavBar";
 import { LabCard } from "@/components/LabCard";
 import { PharmacyCard } from "@/components/PharmacyCard";
+import { ProfileDashboard } from "@/components/ProfileDashboard";
 import { useAuth } from "@/context/AuthContext";
 import { DOCTORS } from "@/data/doctors";
 import { ARTICLES } from "@/data/education";
@@ -162,85 +163,7 @@ function ChatSection({ onNavigateToDoctors, onNavigateToHospitals }: ChatSection
 
 // ─── Section: Profile ─────────────────────────────────────────────────────────
 function ProfileSection() {
-  const colors = useColors();
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const { user, logout } = useAuth();
-
-  if (!user) {
-    return (
-      <View style={[styles.guestWrap, { backgroundColor: colors.background }]}>
-        <View style={[styles.guestIcon, { backgroundColor: colors.primary + "18" }]}>
-          <Ionicons name="person-circle-outline" size={72} color={colors.primary} />
-        </View>
-        <Text style={[styles.guestTitle, { color: colors.foreground }]}>Your Health Profile</Text>
-        <Text style={[styles.guestSub, { color: colors.mutedForeground }]}>
-          Sign in to access your profile, chat history, and personalized health insights.
-        </Text>
-        <Pressable
-          style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
-          onPress={() => router.push("/auth/login" as never)}
-        >
-          <Text style={styles.primaryBtnText}>Sign In</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.outlineBtn, { borderColor: colors.primary }]}
-          onPress={() => router.push("/auth/register" as never)}
-        >
-          <Text style={[styles.outlineBtnText, { color: colors.primary }]}>Create Account</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
-  const initial = user.fullName?.charAt(0)?.toUpperCase() ?? "?";
-
-  return (
-    <ScrollView
-      style={{ backgroundColor: colors.background }}
-      contentContainerStyle={{ paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 100 }}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={[styles.profileHero, { backgroundColor: colors.primary }]}>
-        <View style={styles.avatarCircle}>
-          <Text style={styles.avatarText}>{initial}</Text>
-        </View>
-        <Text style={styles.profileName}>{user.fullName}</Text>
-        <Text style={styles.profileEmail}>{user.email}</Text>
-        <View style={styles.rolePill}>
-          <Text style={styles.rolePillText}>{user.role?.toUpperCase()}</Text>
-        </View>
-      </View>
-      <View style={{ padding: 16, gap: 10 }}>
-        {[
-          { icon: "mail-outline", label: "Email", value: user.email },
-          { icon: "call-outline", label: "Phone", value: user.mobileNumber },
-          { icon: "people-outline", label: "Gender", value: user.sex },
-          { icon: "location-outline", label: "State", value: user.stateOfOrigin },
-        ].map((item) => (
-          <View key={item.label} style={[styles.profileRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={[styles.profileRowIcon, { backgroundColor: colors.primary + "18" }]}>
-              <Ionicons name={item.icon as never} size={18} color={colors.primary} />
-            </View>
-            <View>
-              <Text style={[styles.profileRowLabel, { color: colors.mutedForeground }]}>{item.label}</Text>
-              <Text style={[styles.profileRowValue, { color: colors.foreground }]}>{item.value}</Text>
-            </View>
-          </View>
-        ))}
-        <Pressable
-          style={[styles.logoutBtn, { backgroundColor: "#FEF2F2", borderColor: "#FCA5A5" }]}
-          onPress={async () => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            await logout();
-          }}
-        >
-          <Ionicons name="log-out-outline" size={18} color="#EF4444" />
-          <Text style={{ color: "#EF4444", fontWeight: "600", fontFamily: "Inter_600SemiBold" }}>Sign Out</Text>
-        </Pressable>
-      </View>
-    </ScrollView>
-  );
+  return <ProfileDashboard />;
 }
 
 // ─── Filter chip sets ─────────────────────────────────────────────────────────

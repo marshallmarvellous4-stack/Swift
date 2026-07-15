@@ -1,0 +1,875 @@
+Redesign the current Profile screen into a modern Personal Health Dashboard similar to leading healthcare applications. The design should be clean, professional, responsive, and optimized for both Android and iOS.
+
+
+
+Use the existing SwiftCare design system:
+
+
+
+- Primary Color: #22C55E
+
+- White background
+
+- Rounded cards (16px radius)
+
+- Soft shadows
+
+- Minimalist healthcare aesthetic
+
+- Smooth animations
+
+- React Native components
+
+- Modular and reusable code
+
+
+
+==================================
+
+PROFILE HEADER
+
+==================================
+
+
+
+Display:
+
+
+
+- Large profile picture
+
+- Full name
+
+- Email address
+
+- Verified Patient badge
+
+- Age
+
+- Gender
+
+- Blood Group
+
+- State
+
+- Profile Completion Percentage (e.g. 85%)
+
+
+
+Include an Edit Profile button.
+
+
+
+==================================
+
+QUICK ACTIONS
+
+==================================
+
+
+
+Create a 2-column grid of shortcut cards.
+
+
+
+Each card should have an icon and title.
+
+
+
+Cards:
+
+
+
+- Health Records
+
+- Consultation History
+
+- Appointments
+
+- Prescriptions
+
+- Lab Results
+
+- Medical Wallet
+
+- Saved Doctors
+
+- Favorite Hospitals
+
+
+
+Tapping each card should navigate to its own screen.
+
+
+
+==================================
+
+MEDICAL INFORMATION
+
+==================================
+
+
+
+Create a card displaying:
+
+
+
+Blood Group
+
+
+
+Height
+
+
+
+Weight
+
+
+
+BMI
+
+
+
+Allergies
+
+
+
+Medical Conditions
+
+
+
+Current Medications
+
+
+
+Emergency Contact
+
+
+
+Insurance Provider
+
+
+
+Allow editing.
+
+
+
+==================================
+
+HEALTH RECORDS
+
+==================================
+
+
+
+Create a Health Records section.
+
+
+
+Display recent records such as:
+
+
+
+Blood Test
+
+
+
+Eye Examination
+
+
+
+Prescription
+
+
+
+Vaccination
+
+
+
+MRI
+
+
+
+X-Ray
+
+
+
+Each record should show:
+
+
+
+- Icon
+
+- Record Type
+
+- Date
+
+- Hospital or Lab Name
+
+- View button
+
+
+
+Include a "View All" button.
+
+
+
+==================================
+
+CONSULTATION HISTORY
+
+==================================
+
+
+
+Display every consultation.
+
+
+
+Each consultation card should contain:
+
+
+
+Doctor Photo
+
+
+
+Doctor Name
+
+
+
+Specialty
+
+
+
+Consultation Type
+
+
+
+Date
+
+
+
+Status
+
+
+
+Payment Status
+
+
+
+Buttons:
+
+
+
+View Summary
+
+
+
+Book Again
+
+
+
+The consultation summary should include:
+
+
+
+Symptoms
+
+
+
+Doctor Notes
+
+
+
+Diagnosis
+
+
+
+Prescription
+
+
+
+Lab Requests
+
+
+
+Follow-up Date
+
+
+
+==================================
+
+APPOINTMENTS
+
+==================================
+
+
+
+Create tabs.
+
+
+
+Upcoming
+
+
+
+Completed
+
+
+
+Cancelled
+
+
+
+Each appointment card should show:
+
+
+
+Doctor
+
+
+
+Hospital
+
+
+
+Date
+
+
+
+Time
+
+
+
+Status
+
+
+
+Buttons:
+
+
+
+View Details
+
+
+
+Reschedule
+
+
+
+Cancel
+
+
+
+==================================
+
+PRESCRIPTIONS
+
+==================================
+
+
+
+Display every prescription.
+
+
+
+Each card should contain:
+
+
+
+Medicine List
+
+
+
+Dosage
+
+
+
+Duration
+
+
+
+Doctor
+
+
+
+Date
+
+
+
+Download PDF button
+
+
+
+==================================
+
+LAB RESULTS
+
+==================================
+
+
+
+Display:
+
+
+
+Blood Tests
+
+
+
+Urinalysis
+
+
+
+Eye Tests
+
+
+
+COVID Tests
+
+
+
+Dental Tests
+
+
+
+Each result should have:
+
+
+
+Download
+
+
+
+Share
+
+
+
+View Report
+
+
+
+==================================
+
+MEDICAL TIMELINE
+
+==================================
+
+
+
+Create a timeline showing:
+
+
+
+Appointment
+
+
+
+↓
+
+
+
+Consultation
+
+
+
+↓
+
+
+
+Prescription
+
+
+
+↓
+
+
+
+Lab Request
+
+
+
+↓
+
+
+
+Lab Result
+
+
+
+↓
+
+
+
+Follow-up
+
+
+
+The timeline should be scrollable.
+
+
+
+==================================
+
+PAYMENT HISTORY
+
+==================================
+
+
+
+Display:
+
+
+
+Consultation Payments
+
+
+
+Lab Payments
+
+
+
+Hospital Payments
+
+
+
+Invoices
+
+
+
+Receipts
+
+
+
+Refunds
+
+
+
+Allow downloading receipts.
+
+
+
+==================================
+
+NOTIFICATIONS
+
+==================================
+
+
+
+Show:
+
+
+
+Upcoming Appointments
+
+
+
+Medication Reminders
+
+
+
+Lab Results Ready
+
+
+
+Doctor Messages
+
+
+
+==================================
+
+SETTINGS
+
+==================================
+
+
+
+Create cards for:
+
+
+
+Personal Information
+
+
+
+Privacy
+
+
+
+Security
+
+
+
+Biometric Login
+
+
+
+Notification Settings
+
+
+
+Language
+
+
+
+Help & Support
+
+
+
+About SwiftCare
+
+
+
+==================================
+
+LOGOUT
+
+==================================
+
+
+
+Keep the logout button fixed at the bottom.
+
+
+
+==================================
+
+BOTTOM NAVIGATION
+
+==================================
+
+
+
+Keep the existing bottom navigation:
+
+
+
+Home
+
+
+
+Profile
+
+
+
+Doctors
+
+
+
+Hospitals
+
+
+
+Search
+
+
+
+==================================
+
+DATABASE STRUCTURE
+
+==================================
+
+
+
+Users
+
+
+
+id
+
+photo
+
+fullName
+
+email
+
+phone
+
+gender
+
+dateOfBirth
+
+bloodGroup
+
+height
+
+weight
+
+state
+
+insurance
+
+emergencyContact
+
+
+
+HealthRecords
+
+
+
+id
+
+userId
+
+recordType
+
+hospital
+
+doctor
+
+date
+
+fileUrl
+
+
+
+Consultations
+
+
+
+id
+
+userId
+
+doctorId
+
+symptoms
+
+diagnosis
+
+prescription
+
+labRequest
+
+summary
+
+status
+
+paymentStatus
+
+createdAt
+
+
+
+Appointments
+
+
+
+id
+
+userId
+
+doctorId
+
+date
+
+time
+
+status
+
+
+
+Prescriptions
+
+
+
+id
+
+consultationId
+
+doctorId
+
+medications
+
+dosage
+
+duration
+
+notes
+
+
+
+LabResults
+
+
+
+id
+
+patientId
+
+labId
+
+testName
+
+result
+
+pdfUrl
+
+status
+
+
+
+Payments
+
+
+
+id
+
+userId
+
+amount
+
+type
+
+status
+
+transactionReference
+
+paidAt
+
+
+
+==================================
+
+EXTRA FEATURES
+
+==================================
+
+
+
+Implement:
+
+
+
+- Pull-to-refresh
+
+- Skeleton loading placeholders
+
+- Empty states
+
+- Search functionality
+
+- Filter consultation history
+
+- Filter lab results
+
+- Download PDFs
+
+- Share reports
+
+- Smooth page transitions
+
+- Responsive layouts
+
+- Accessibility support
+
+- Dark mode compatibility
+
+- Secure data handling
+
+
+
+Generate production-ready React Native code with reusable components, React Navigation integration, and clear comments.
