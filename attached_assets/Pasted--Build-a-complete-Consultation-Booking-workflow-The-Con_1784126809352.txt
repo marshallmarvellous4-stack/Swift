@@ -1,0 +1,841 @@
+ 
+
+
+
+Build a complete Consultation Booking workflow.
+
+
+
+The "Consultation" button on the doctors profile should navigate users through a professional healthcare booking experience. 
+
+
+
+The workflow should be:
+
+
+
+Home Screen
+
+→ Consultation Booking
+
+→ Booking Summary
+
+→ Payment
+
+→ Payment Success
+
+→ Chat with Consultant
+
+
+
+The UI should follow the existing SwiftCare design system:
+
+
+
+* Primary color: Green (#22C55E)
+
+* White background
+
+* Modern rounded cards
+
+* Clean medical appearance
+
+* Responsive on Android and iOS
+
+* Smooth animations
+
+* Professional typography
+
+
+
+---
+
+
+
+## Screen 1: Consultation Booking
+
+
+
+Create a new screen called:
+
+
+
+ConsultationBookingScreen
+
+
+
+The page should include:
+
+
+
+### Consultant Card
+
+
+
+Display:
+
+
+
+* Consultant profile photo
+
+* Full name
+
+* Specialty
+
+* Rating
+
+* Consultation fee
+
+
+
+Example:
+
+
+
+Dr. Sarah Johnson
+
+General Physician
+
+⭐ 4.9
+
+₦5,000
+
+
+
+---
+
+
+
+### Consultation Type
+
+
+
+Allow the patient to choose one option.
+
+
+
+Options:
+
+
+
+* Chat Consultation
+
+* Voice Call
+
+* Video Call
+
+
+
+Use selectable cards.
+
+
+
+---
+
+
+
+### Date Picker
+
+
+
+Allow users to choose a consultation date.
+
+
+
+Use a modern calendar component.
+
+
+
+---
+
+
+
+### Time Selection
+
+
+
+Display available time slots such as:
+
+
+
+09:00 AM
+
+
+
+10:30 AM
+
+
+
+12:00 PM
+
+
+
+03:00 PM
+
+
+
+05:00 PM
+
+
+
+Unavailable times should appear disabled.
+
+
+
+---
+
+
+
+### Reason for Consultation
+
+
+
+Provide a multiline text area.
+
+
+
+Placeholder:
+
+
+
+"Describe your symptoms or reason for consultation..."
+
+
+
+Minimum 20 characters.
+
+
+
+Maximum 500 characters.
+
+
+
+---
+
+
+
+### Upload Documents
+
+
+
+Allow optional uploads.
+
+
+
+Support:
+
+
+
+* Lab Results
+
+* Images
+
+* Prescriptions
+
+
+
+Display uploaded files as preview cards.
+
+
+
+---
+
+
+
+### Continue Button
+
+
+
+Validate:
+
+
+
+* Date selected
+
+* Time selected
+
+* Consultation type selected
+
+* Reason entered
+
+
+
+Then navigate to Booking Summary.
+
+
+
+---
+
+
+
+## Screen 2: Booking Summary
+
+
+
+Display:
+
+
+
+Consultant
+
+
+
+Consultation Type
+
+
+
+Date
+
+
+
+Time
+
+
+
+Reason
+
+
+
+Consultation Fee
+
+
+
+Service Fee
+
+
+
+Total Amount
+
+
+
+Buttons:
+
+
+
+Back
+
+
+
+Proceed to Payment
+
+
+
+---
+
+
+
+## Screen 3: Payment
+
+
+
+Create a beautiful payment page.
+
+
+
+Payment methods:
+
+
+
+* Debit Card
+
+* Paystack
+
+* Flutterwave
+
+* Bank Transfer
+
+* Wallet (Coming Soon)
+
+
+
+Display order summary.
+
+
+
+After successful payment:
+
+
+
+Save booking to the database.
+
+
+
+Generate a consultation ID.
+
+
+
+Status:
+
+
+
+Confirmed
+
+
+
+Navigate to Payment Success.
+
+
+
+---
+
+
+
+## Screen 4: Payment Success
+
+
+
+Show:
+
+
+
+Large success icon
+
+
+
+Message:
+
+
+
+"Your consultation has been confirmed."
+
+
+
+Display:
+
+
+
+Consultant
+
+
+
+Date
+
+
+
+Time
+
+
+
+Buttons:
+
+
+
+Open Chat
+
+
+
+Back Home
+
+
+
+---
+
+
+
+## Screen 5: Chat Screen
+
+
+
+Create:
+
+
+
+ConsultationChatScreen
+
+
+
+Features:
+
+
+
+Real-time messaging
+
+
+
+Message bubbles
+
+
+
+Typing indicator
+
+
+
+Read receipts
+
+
+
+Time stamps
+
+
+
+Image upload
+
+
+
+Document upload
+
+
+
+Voice notes
+
+
+
+Auto-scroll
+
+
+
+Input field fixed at bottom
+
+
+
+Professional WhatsApp-style layout
+
+
+
+Header should display:
+
+
+
+Consultant photo
+
+
+
+Name
+
+
+
+Online status
+
+
+
+Buttons:
+
+
+
+Voice Call
+
+
+
+Video Call
+
+
+
+---
+
+
+
+## Chat Requirements
+
+
+
+Patients can:
+
+
+
+Send text
+
+
+
+Send images
+
+
+
+Send PDFs
+
+
+
+Send prescriptions
+
+
+
+Send voice notes
+
+
+
+Consultants can:
+
+
+
+Reply
+
+
+
+Send prescriptions
+
+
+
+Send lab requests
+
+
+
+Send follow-up appointment
+
+
+
+Share files
+
+
+
+---
+
+
+
+## Database Collections
+
+
+
+Consultations
+
+
+
+id
+
+
+
+patientId
+
+
+
+consultantId
+
+
+
+consultationType
+
+
+
+date
+
+
+
+time
+
+
+
+reason
+
+
+
+status
+
+
+
+paymentStatus
+
+
+
+amount
+
+
+
+createdAt
+
+
+
+Payments
+
+
+
+id
+
+
+
+consultationId
+
+
+
+amount
+
+
+
+paymentMethod
+
+
+
+status
+
+
+
+transactionReference
+
+
+
+paidAt
+
+
+
+Chats
+
+
+
+id
+
+
+
+consultationId
+
+
+
+participants
+
+
+
+lastMessage
+
+
+
+updatedAt
+
+
+
+Messages
+
+
+
+id
+
+
+
+chatId
+
+
+
+senderId
+
+
+
+message
+
+
+
+messageType
+
+
+
+imageUrl
+
+
+
+documentUrl
+
+
+
+voiceUrl
+
+
+
+createdAt
+
+
+
+---
+
+
+
+## Navigation
+
+
+
+Home
+
+
+
+↓
+
+
+
+ConsultationBookingScreen
+
+
+
+↓
+
+
+
+BookingSummaryScreen
+
+
+
+↓
+
+
+
+PaymentScreen
+
+
+
+↓
+
+
+
+PaymentSuccessScreen
+
+
+
+↓
+
+
+
+ConsultationChatScreen
+
+
+
+---
+
+
+
+## UX Requirements
+
+
+
+Show loading indicators.
+
+
+
+Show success animations.
+
+
+
+Show validation errors.
+
+
+
+Prevent double booking of the same time slot.
+
+
+
+Disable unavailable slots.
+
+
+
+Display countdown until appointment time.
+
+
+
+Allow cancellation before the appointment starts.
+
+
+
+---
+
+
+
+## Code Requirements
+
+
+
+* Use reusable components.
+
+* Keep code modular and organized.
+
+* Use React Navigation for navigation.
+
+* Use Firebase or Supabase for authentication and database.
+
+* Store all consultation data securely.
+
+* Ensure responsive layouts.
+
+* Follow clean architecture and best coding practices.
+
+* Add comments explaining key sections of the code.

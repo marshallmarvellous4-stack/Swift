@@ -56,6 +56,26 @@ function RootLayoutNav() {
         name="pharmacy/[id]"
         options={{ headerShown: false, presentation: "card" }}
       />
+      <Stack.Screen
+        name="consultation/booking"
+        options={{ headerShown: false, presentation: "card" }}
+      />
+      <Stack.Screen
+        name="consultation/summary"
+        options={{ headerShown: false, presentation: "card" }}
+      />
+      <Stack.Screen
+        name="consultation/payment"
+        options={{ headerShown: false, presentation: "card" }}
+      />
+      <Stack.Screen
+        name="consultation/success"
+        options={{ headerShown: false, presentation: "modal" }}
+      />
+      <Stack.Screen
+        name="consultation/chat"
+        options={{ headerShown: false, presentation: "card" }}
+      />
     </Stack>
   );
 }

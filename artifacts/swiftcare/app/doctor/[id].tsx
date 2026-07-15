@@ -36,22 +36,10 @@ export default function DoctorDetailScreen() {
 
   function handleBook() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert(
-      "Book Consultation",
-      `Book a consultation with ${doctor!.name}?\n\nFee: ₦${doctor!.fee.toLocaleString()}`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Confirm Booking",
-          onPress: () => {
-            Alert.alert(
-              "Booking Confirmed!",
-              `Your consultation with ${doctor!.name} has been requested. You will receive a confirmation shortly.`
-            );
-          },
-        },
-      ]
-    );
+    router.push({
+      pathname: "/consultation/booking" as never,
+      params: { doctorId: doctor!.id },
+    });
   }
 
   return (
