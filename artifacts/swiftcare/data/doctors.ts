@@ -11,6 +11,9 @@ export interface Doctor {
   image: string;
   email: string;
   fee: number;
+  languages: string[];
+  status: "online" | "offline" | "busy";
+  isVerified: boolean;
 }
 
 export const DOCTORS: Doctor[] = [
@@ -27,6 +30,9 @@ export const DOCTORS: Doctor[] = [
     image: "https://randomuser.me/api/portraits/women/44.jpg",
     email: "a.okafor@swiftcare.com",
     fee: 5000,
+    languages: ["English", "Yoruba", "Igbo"],
+    status: "online",
+    isVerified: true,
   },
   {
     id: "2",
@@ -41,6 +47,9 @@ export const DOCTORS: Doctor[] = [
     image: "https://randomuser.me/api/portraits/men/32.jpg",
     email: "c.nwosu@swiftcare.com",
     fee: 12000,
+    languages: ["English", "Igbo"],
+    status: "busy",
+    isVerified: true,
   },
   {
     id: "3",
@@ -55,6 +64,9 @@ export const DOCTORS: Doctor[] = [
     image: "https://randomuser.me/api/portraits/women/68.jpg",
     email: "f.alhassan@swiftcare.com",
     fee: 7500,
+    languages: ["English", "Hausa", "French"],
+    status: "online",
+    isVerified: true,
   },
   {
     id: "4",
@@ -69,6 +81,9 @@ export const DOCTORS: Doctor[] = [
     image: "https://randomuser.me/api/portraits/men/55.jpg",
     email: "b.adeleke@swiftcare.com",
     fee: 9000,
+    languages: ["English", "Yoruba"],
+    status: "offline",
+    isVerified: true,
   },
   {
     id: "5",
@@ -83,6 +98,9 @@ export const DOCTORS: Doctor[] = [
     image: "https://randomuser.me/api/portraits/women/22.jpg",
     email: "n.eze@swiftcare.com",
     fee: 10000,
+    languages: ["English", "Igbo"],
+    status: "online",
+    isVerified: true,
   },
   {
     id: "6",
@@ -97,5 +115,8 @@ export const DOCTORS: Doctor[] = [
     image: "https://randomuser.me/api/portraits/men/77.jpg",
     email: "e.taiwo@swiftcare.com",
     fee: 8500,
+    languages: ["English", "Yoruba", "French"],
+    status: "online",
+    isVerified: true,
   },
 ];

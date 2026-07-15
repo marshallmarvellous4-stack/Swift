@@ -33,6 +33,7 @@ import { useColors } from "@/hooks/useColors";
 import {
   ChatMessage,
   createMessage,
+  detectIntent,
   getChatbotResponse,
 } from "@/utils/chatbot";
 
@@ -44,7 +45,12 @@ const WELCOME: ChatMessage = createMessage(
 );
 
 // ─── Section: Chat ────────────────────────────────────────────────────────────
-function ChatSection() {
+interface ChatSectionProps {
+  onNavigateToDoctors: () => void;
+  onNavigateToHospitals: () => void;
+}
+
+function ChatSection({ onNavigateToDoctors, onNavigateToHospitals }: ChatSectionProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<ChatMessage[]>([WELCOME]);
@@ -60,7 +66,27 @@ function ChatSection() {
     setMessages((prev) => [createMessage(text, "user"), ...prev]);
     setIsTyping(true);
     await new Promise((r) => setTimeout(r, 800 + Math.random() * 600));
-    setMessages((prev) => [createMessage(getChatbotResponse(text), "assistant"), ...prev]);
+
+    const intent = detectIntent(text);
+
+    if (intent === "doctor_consultation") {
+      setMessages((prev) => [
+        createMessage(
+          "I can connect you with one of our verified healthcare professionals. Tap below to browse available doctors and book a consultation.",
+          "assistant",
+          "doctor_consultation"
+        ),
+        ...prev,
+      ]);
+    } else if (intent === "urgent") {
+      setMessages((prev) => [
+        createMessage(getChatbotResponse(text), "assistant", "urgent"),
+        ...prev,
+      ]);
+    } else {
+      setMessages((prev) => [createMessage(getChatbotResponse(text), "assistant"), ...prev]);
+    }
+
     setIsTyping(false);
     inputRef.current?.focus();
   }
@@ -74,7 +100,13 @@ function ChatSection() {
       <FlatList
         data={messages}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <ChatBubble message={item} />}
+        renderItem={({ item }) => (
+          <ChatBubble
+            message={item}
+            onConsultDoctor={onNavigateToDoctors}
+            onFindEmergency={onNavigateToHospitals}
+          />
+        )}
         inverted
         contentContainerStyle={styles.chatList}
         keyboardDismissMode="interactive"
@@ -211,20 +243,101 @@ function ProfileSection() {
   );
 }
 
+// ─── Filter chip sets ─────────────────────────────────────────────────────────
+const SPECIALTY_FILTERS = ["All", "General Practitioner", "Cardiologist", "Pediatrician", "Dermatologist", "Gynecologist", "Psychiatrist"];
+const CONSULT_TYPE_FILTERS = ["All", "Chat", "Voice", "Video"];
+const AVAILABILITY_FILTERS = ["All", "Online", "Busy", "Offline"];
+const RATING_FILTERS = ["All", "4.9+", "4.8+", "4.5+"];
+const LANGUAGE_FILTERS = ["All", "English", "Yoruba", "Igbo", "Hausa", "French"];
+
+interface FilterChipsProps {
+  label: string;
+  options: string[];
+  selected: string;
+  onSelect: (v: string) => void;
+}
+
+function FilterChips({ label, options, selected, onSelect }: FilterChipsProps) {
+  const colors = useColors();
+  return (
+    <View style={styles.filterGroup}>
+      <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>{label}</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+        {options.map((opt) => {
+          const active = selected === opt;
+          return (
+            <Pressable
+              key={opt}
+              style={[
+                styles.filterChip,
+                {
+                  backgroundColor: active ? colors.primary : colors.muted,
+                  borderColor: active ? colors.primary : colors.border,
+                },
+              ]}
+              onPress={() => onSelect(opt)}
+            >
+              <Text style={[styles.filterChipText, { color: active ? "#fff" : colors.mutedForeground }]}>
+                {opt}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
 // ─── Section: Doctors ─────────────────────────────────────────────────────────
 function DoctorsSection() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState("");
-  const filtered = DOCTORS.filter(
-    (d) =>
-      d.name.toLowerCase().includes(search.toLowerCase()) ||
-      d.specialty.toLowerCase().includes(search.toLowerCase())
-  );
+  const [specialty, setSpecialty] = useState("All");
+  const [consultType, setConsultType] = useState("All");
+  const [availability, setAvailability] = useState("All");
+  const [ratingFilter, setRatingFilter] = useState("All");
+  const [language, setLanguage] = useState("All");
+  const [showFilters, setShowFilters] = useState(false);
+
+  const filtered = DOCTORS.filter((d) => {
+    const q = search.toLowerCase();
+    const matchSearch = !q || d.name.toLowerCase().includes(q) || d.specialty.toLowerCase().includes(q);
+    const matchSpecialty = specialty === "All" || d.specialty === specialty;
+    const matchAvailability = availability === "All" || d.status === availability.toLowerCase();
+    const matchRating =
+      ratingFilter === "All" ||
+      (ratingFilter === "4.9+" && d.rating >= 4.9) ||
+      (ratingFilter === "4.8+" && d.rating >= 4.8) ||
+      (ratingFilter === "4.5+" && d.rating >= 4.5);
+    const matchLanguage = language === "All" || d.languages.includes(language);
+    return matchSearch && matchSpecialty && matchAvailability && matchRating && matchLanguage;
+  });
+
+  const activeFilterCount = [specialty, consultType, availability, ratingFilter, language].filter((v) => v !== "All").length;
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Header */}
       <View style={[styles.sectionHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <Text style={[styles.sectionHeading, { color: colors.foreground }]}>Find Doctors</Text>
+        <View style={styles.sectionHeadingRow}>
+          <Text style={[styles.sectionHeading, { color: colors.foreground }]}>Find Doctors</Text>
+          <Pressable
+            style={[
+              styles.filterToggleBtn,
+              {
+                backgroundColor: activeFilterCount > 0 ? colors.primary : colors.muted,
+                borderColor: activeFilterCount > 0 ? colors.primary : colors.border,
+              },
+            ]}
+            onPress={() => setShowFilters((v) => !v)}
+          >
+            <Ionicons name="options-outline" size={15} color={activeFilterCount > 0 ? "#fff" : colors.mutedForeground} />
+            <Text style={[styles.filterToggleText, { color: activeFilterCount > 0 ? "#fff" : colors.mutedForeground }]}>
+              Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+            </Text>
+          </Pressable>
+        </View>
         <View style={[styles.searchBar, { backgroundColor: colors.muted, borderColor: colors.border }]}>
           <Ionicons name="search-outline" size={16} color={colors.mutedForeground} />
           <TextInput
@@ -234,15 +347,60 @@ function DoctorsSection() {
             value={search}
             onChangeText={setSearch}
           />
+          {search.length > 0 && (
+            <Pressable onPress={() => setSearch("")}>
+              <Ionicons name="close-circle" size={16} color={colors.mutedForeground} />
+            </Pressable>
+          )}
+        </View>
+
+        {/* Filter Panel */}
+        {showFilters && (
+          <View style={[styles.filterPanel, { borderTopColor: colors.border }]}>
+            <FilterChips label="Specialty" options={SPECIALTY_FILTERS} selected={specialty} onSelect={setSpecialty} />
+            <FilterChips label="Consultation Type" options={CONSULT_TYPE_FILTERS} selected={consultType} onSelect={setConsultType} />
+            <FilterChips label="Availability" options={AVAILABILITY_FILTERS} selected={availability} onSelect={setAvailability} />
+            <FilterChips label="Rating" options={RATING_FILTERS} selected={ratingFilter} onSelect={setRatingFilter} />
+            <FilterChips label="Language" options={LANGUAGE_FILTERS} selected={language} onSelect={setLanguage} />
+            {activeFilterCount > 0 && (
+              <Pressable
+                style={[styles.clearFiltersBtn, { borderColor: colors.border }]}
+                onPress={() => {
+                  setSpecialty("All");
+                  setConsultType("All");
+                  setAvailability("All");
+                  setRatingFilter("All");
+                  setLanguage("All");
+                }}
+              >
+                <Ionicons name="refresh-outline" size={13} color={colors.mutedForeground} />
+                <Text style={[styles.clearFiltersText, { color: colors.mutedForeground }]}>Clear all filters</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+      </View>
+
+      {/* Results count */}
+      <View style={[styles.resultsRow, { borderBottomColor: colors.border }]}>
+        <Text style={[styles.resultsText, { color: colors.mutedForeground }]}>
+          {filtered.length} verified doctor{filtered.length !== 1 ? "s" : ""} found
+        </Text>
+        <View style={[styles.onlinePill, { backgroundColor: "#22C55E18" }]}>
+          <View style={[styles.onlineDot, { backgroundColor: "#22C55E" }]} />
+          <Text style={[styles.onlinePillText, { color: "#16A34A" }]}>
+            {DOCTORS.filter((d) => d.status === "online").length} Online
+          </Text>
         </View>
       </View>
+
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => <DoctorCard doctor={item} />}
-        ListEmptyComponent={<EmptyState icon="person-outline" message="No doctors found" />}
+        ListEmptyComponent={<EmptyState icon="person-outline" message="No doctors match your filters" />}
       />
     </View>
   );
@@ -429,16 +587,6 @@ function EmptyState({ icon, message }: { icon: string; message: string }) {
 }
 
 // ─── Main Home Screen ─────────────────────────────────────────────────────────
-const SECTION_COMPONENTS = [
-  ChatSection,
-  ProfileSection,
-  DoctorsSection,
-  HospitalsSection,
-  LabsSection,
-  PharmacySection,
-  EducationSection,
-];
-
 export default function HomeScreen() {
   const colors = useColors();
   const [activeIndex, setActiveIndex] = useState(0);
@@ -454,6 +602,19 @@ export default function HomeScreen() {
     setActiveIndex(index);
   }
 
+  const sections = [
+    <ChatSection
+      onNavigateToDoctors={() => scrollToSection(2)}
+      onNavigateToHospitals={() => scrollToSection(3)}
+    />,
+    <ProfileSection />,
+    <DoctorsSection />,
+    <HospitalsSection />,
+    <LabsSection />,
+    <PharmacySection />,
+    <EducationSection />,
+  ];
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
@@ -468,12 +629,9 @@ export default function HomeScreen() {
         decelerationRate="fast"
         nestedScrollEnabled
       >
-        {SECTION_COMPONENTS.map((SectionComponent, index) => (
-          <View
-            key={NAV_SECTIONS[index].key}
-            style={{ width: SCREEN_WIDTH, flex: 1 }}
-          >
-            <SectionComponent />
+        {sections.map((section, index) => (
+          <View key={NAV_SECTIONS[index].key} style={{ width: SCREEN_WIDTH, flex: 1 }}>
+            {section}
           </View>
         ))}
       </ScrollView>
@@ -621,5 +779,55 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16, fontFamily: "Inter_600SemiBold", fontWeight: "600" as const,
+  },
+
+  // Doctors filter styles
+  sectionHeadingRow: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+  },
+  filterToggleBtn: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: 20, borderWidth: 1,
+  },
+  filterToggleText: {
+    fontSize: 12, fontFamily: "Inter_600SemiBold", fontWeight: "600" as const,
+  },
+  filterPanel: {
+    borderTopWidth: 1, paddingTop: 10, gap: 10, marginTop: 4,
+  },
+  filterGroup: { gap: 6 },
+  filterLabel: {
+    fontSize: 11, fontFamily: "Inter_600SemiBold", fontWeight: "600" as const,
+    textTransform: "uppercase" as const, letterSpacing: 0.5,
+  },
+  filterChip: {
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: 20, borderWidth: 1,
+  },
+  filterChipText: {
+    fontSize: 12, fontFamily: "Inter_500Medium", fontWeight: "500" as const,
+  },
+  clearFiltersBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 5, paddingVertical: 8, borderRadius: 8, borderWidth: 1, marginTop: 2,
+  },
+  clearFiltersText: {
+    fontSize: 12, fontFamily: "Inter_500Medium", fontWeight: "500" as const,
+  },
+  resultsRow: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 0,
+  },
+  resultsText: {
+    fontSize: 12, fontFamily: "Inter_400Regular",
+  },
+  onlinePill: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20,
+  },
+  onlineDot: { width: 6, height: 6, borderRadius: 3 },
+  onlinePillText: {
+    fontSize: 11, fontFamily: "Inter_600SemiBold", fontWeight: "600" as const,
   },
 });
