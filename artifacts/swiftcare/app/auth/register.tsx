@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
+import { StateSelector } from "@/components/StateSelector";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 
@@ -22,8 +23,6 @@ const ROLE_OPTIONS: { value: "user" | "doctor" | "admin"; label: string }[] = [
   { value: "doctor", label: "Doctor" },
   { value: "admin", label: "Admin" },
 ];
-
-const STATES = ["Abia","Adamawa","Akwa Ibom","Anambra","Bauchi","Bayelsa","Benue","Borno","Cross River","Delta","Ebonyi","Edo","Ekiti","Enugu","FCT","Gombe","Imo","Jigawa","Kaduna","Kano","Katsina","Kebbi","Kogi","Kwara","Lagos","Nasarawa","Niger","Ogun","Ondo","Osun","Oyo","Plateau","Rivers","Sokoto","Taraba","Yobe","Zamfara"];
 
 export default function RegisterScreen() {
   const colors = useColors();
@@ -168,48 +167,12 @@ export default function RegisterScreen() {
 
         <View style={styles.fieldGroup}>
           <Text style={[styles.label, { color: colors.foreground }]}>State of Origin</Text>
-          <View style={styles.stateGrid}>
-            {STATES.slice(0, 8).map((s) => (
-              <Pressable
-                key={s}
-                style={[
-                  styles.stateChip,
-                  {
-                    backgroundColor: stateOfOrigin === s ? colors.primary : colors.muted,
-                    borderColor: stateOfOrigin === s ? colors.primary : colors.border,
-                  },
-                ]}
-                onPress={() => setStateOfOrigin(s)}
-              >
-                <Text
-                  style={[
-                    styles.stateText,
-                    { color: stateOfOrigin === s ? "#fff" : colors.mutedForeground },
-                  ]}
-                >
-                  {s}
-                </Text>
-              </Pressable>
-            ))}
-            <Pressable
-              style={[
-                styles.stateChip,
-                {
-                  backgroundColor: stateOfOrigin && !STATES.slice(0, 8).includes(stateOfOrigin) ? colors.primary : colors.muted,
-                  borderColor: colors.border,
-                },
-              ]}
-              onPress={() => {
-                Alert.prompt
-                  ? Alert.prompt("State of Origin", "Enter your state", (s) => s && setStateOfOrigin(s), "plain-text", stateOfOrigin)
-                  : Alert.alert("Feature", "Tap to type your state name directly.");
-              }}
-            >
-              <Text style={[styles.stateText, { color: colors.mutedForeground }]}>
-                {stateOfOrigin && !STATES.slice(0, 8).includes(stateOfOrigin) ? stateOfOrigin : "Other..."}
-              </Text>
-            </Pressable>
-          </View>
+          <StateSelector
+            value={stateOfOrigin}
+            onChange={setStateOfOrigin}
+            placeholder="Select your state of origin"
+            required
+          />
         </View>
 
         <View style={styles.fieldGroup}>
@@ -398,22 +361,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "500" as const,
     fontFamily: "Inter_500Medium",
-  },
-  stateGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  stateChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  stateText: {
-    fontSize: 12,
-    fontFamily: "Inter_500Medium",
-    fontWeight: "500" as const,
   },
   primaryBtn: {
     paddingVertical: 16,
