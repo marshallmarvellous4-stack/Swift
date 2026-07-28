@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import React, { useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   Dimensions,
   FlatList,
@@ -14,7 +14,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ChatBubble } from "@/components/ChatBubble";
 import { DoctorCard } from "@/components/DoctorCard";
@@ -24,7 +24,6 @@ import { HomeNavBar, NAV_SECTIONS } from "@/components/HomeNavBar";
 import { LabCard } from "@/components/LabCard";
 import { PharmacyCard } from "@/components/PharmacyCard";
 import { ProfileDashboard } from "@/components/ProfileDashboard";
-import { useAuth } from "@/context/AuthContext";
 import { DOCTORS } from "@/data/doctors";
 import { ARTICLES } from "@/data/education";
 import { HOSPITALS } from "@/data/hospitals";
@@ -51,7 +50,60 @@ interface ChatSectionProps {
   onNavigateToHospitals: () => void;
 }
 
-function ChatSection({ onNavigateToDoctors, onNavigateToHospitals }: ChatSectionProps) {
+// Stable render item component so FlatList doesn't re-render all rows on every keystroke
+const ChatRow = React.memo(function ChatRow({
+  item,
+  onConsultDoctor,
+  onFindEmergency,
+}: {
+  item: ChatMessage;
+  onConsultDoctor: () => void;
+  onFindEmergency: () => void;
+}) {
+  return (
+    <ChatBubble
+      message={item}
+      onConsultDoctor={onConsultDoctor}
+      onFindEmergency={onFindEmergency}
+    />
+  );
+});
+
+// Typing indicator rendered as a stable component outside FlatList header
+// so it never causes a list layout recalculation
+const TypingIndicator = React.memo(function TypingIndicator({
+  visible,
+  colors,
+}: {
+  visible: boolean;
+  colors: ReturnType<typeof useColors>;
+}) {
+  if (!visible) return null;
+  return (
+    <View style={styles.typingRow}>
+      <View
+        style={[
+          styles.typingBubble,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ]}
+      >
+        <View style={styles.dotsRow}>
+          {[0, 1, 2].map((i) => (
+            <View
+              key={i}
+              style={[styles.dot, { backgroundColor: colors.mutedForeground }]}
+            />
+          ))}
+        </View>
+      </View>
+    </View>
+  );
+});
+
+const ChatSection = React.memo(function ChatSection({
+  onNavigateToDoctors,
+  onNavigateToHospitals,
+}: ChatSectionProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<ChatMessage[]>([WELCOME]);
@@ -59,7 +111,7 @@ function ChatSection({ onNavigateToDoctors, onNavigateToHospitals }: ChatSection
   const [isTyping, setIsTyping] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
-  async function handleSend() {
+  const handleSend = useCallback(async () => {
     const text = input.trim();
     if (!text) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -85,61 +137,70 @@ function ChatSection({ onNavigateToDoctors, onNavigateToHospitals }: ChatSection
         ...prev,
       ]);
     } else {
-      setMessages((prev) => [createMessage(getChatbotResponse(text), "assistant"), ...prev]);
+      setMessages((prev) => [
+        createMessage(getChatbotResponse(text), "assistant"),
+        ...prev,
+      ]);
     }
 
     setIsTyping(false);
     inputRef.current?.focus();
-  }
+  }, [input]);
+
+  const renderItem = useCallback(
+    ({ item }: { item: ChatMessage }) => (
+      <ChatRow
+        item={item}
+        onConsultDoctor={onNavigateToDoctors}
+        onFindEmergency={onNavigateToHospitals}
+      />
+    ),
+    [onNavigateToDoctors, onNavigateToHospitals]
+  );
+
+  const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
-    >
+    // No KeyboardAvoidingView here — the root HomeScreen KAV handles it.
+    // This View just fills the page slot in the horizontal pager.
+    <View style={{ flex: 1 }}>
       <FlatList
         data={messages}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <ChatBubble
-            message={item}
-            onConsultDoctor={onNavigateToDoctors}
-            onFindEmergency={onNavigateToHospitals}
-          />
-        )}
+        keyExtractor={keyExtractor}
+        renderItem={renderItem}
         inverted
+        style={{ flex: 1 }}
         contentContainerStyle={styles.chatList}
         keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        ListHeaderComponent={
-          isTyping ? (
-            <View style={styles.typingRow}>
-              <View style={[styles.typingBubble, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <View style={styles.dotsRow}>
-                  {[0, 1, 2].map((i) => (
-                    <View key={i} style={[styles.dot, { backgroundColor: colors.mutedForeground }]} />
-                  ))}
-                </View>
-              </View>
-            </View>
-          ) : null
-        }
+        // Typing indicator is rendered BELOW the FlatList, not as a
+        // ListHeaderComponent, so it never triggers a list layout pass.
+        removeClippedSubviews={false}
       />
+      <TypingIndicator visible={isTyping} colors={colors} />
       <View
         style={[
           styles.inputBar,
           {
             backgroundColor: colors.card,
             borderTopColor: colors.border,
+            // insets.bottom collapses to 0 on iOS when keyboard is open,
+            // so this correctly provides safe-area space only when needed.
             paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 4,
           },
         ]}
       >
         <TextInput
           ref={inputRef}
-          style={[styles.input, { backgroundColor: colors.muted, color: colors.foreground, borderColor: colors.border }]}
+          style={[
+            styles.input,
+            {
+              backgroundColor: colors.muted,
+              color: colors.foreground,
+              borderColor: colors.border,
+            },
+          ]}
           placeholder="Describe how you feel..."
           placeholderTextColor={colors.mutedForeground}
           value={input}
@@ -148,26 +209,44 @@ function ChatSection({ onNavigateToDoctors, onNavigateToHospitals }: ChatSection
           maxLength={500}
           returnKeyType="send"
           onSubmitEditing={handleSend}
+          blurOnSubmit={false}
         />
         <Pressable
-          style={[styles.sendBtn, { backgroundColor: input.trim() ? colors.primary : colors.muted }]}
+          style={[
+            styles.sendBtn,
+            {
+              backgroundColor: input.trim() ? colors.primary : colors.muted,
+            },
+          ]}
           onPress={handleSend}
           disabled={!input.trim()}
         >
-          <Ionicons name="send" size={18} color={input.trim() ? "#fff" : colors.mutedForeground} />
+          <Ionicons
+            name="send"
+            size={18}
+            color={input.trim() ? "#fff" : colors.mutedForeground}
+          />
         </Pressable>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
-}
+});
 
 // ─── Section: Profile ─────────────────────────────────────────────────────────
-function ProfileSection() {
+const ProfileSection = React.memo(function ProfileSection() {
   return <ProfileDashboard />;
-}
+});
 
 // ─── Filter chip sets ─────────────────────────────────────────────────────────
-const SPECIALTY_FILTERS = ["All", "General Practitioner", "Cardiologist", "Pediatrician", "Dermatologist", "Gynecologist", "Psychiatrist"];
+const SPECIALTY_FILTERS = [
+  "All",
+  "General Practitioner",
+  "Cardiologist",
+  "Pediatrician",
+  "Dermatologist",
+  "Gynecologist",
+  "Psychiatrist",
+];
 const CONSULT_TYPE_FILTERS = ["All", "Chat", "Voice", "Video"];
 const AVAILABILITY_FILTERS = ["All", "Online", "Busy", "Offline"];
 const RATING_FILTERS = ["All", "4.9+", "4.8+", "4.5+"];
@@ -180,12 +259,24 @@ interface FilterChipsProps {
   onSelect: (v: string) => void;
 }
 
-function FilterChips({ label, options, selected, onSelect }: FilterChipsProps) {
+const FilterChips = React.memo(function FilterChips({
+  label,
+  options,
+  selected,
+  onSelect,
+}: FilterChipsProps) {
   const colors = useColors();
   return (
     <View style={styles.filterGroup}>
-      <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>{label}</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+      <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>
+        {label}
+      </Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ gap: 6 }}
+        keyboardShouldPersistTaps="handled"
+      >
         {options.map((opt) => {
           const active = selected === opt;
           return (
@@ -200,7 +291,12 @@ function FilterChips({ label, options, selected, onSelect }: FilterChipsProps) {
               ]}
               onPress={() => onSelect(opt)}
             >
-              <Text style={[styles.filterChipText, { color: active ? "#fff" : colors.mutedForeground }]}>
+              <Text
+                style={[
+                  styles.filterChipText,
+                  { color: active ? "#fff" : colors.mutedForeground },
+                ]}
+              >
                 {opt}
               </Text>
             </Pressable>
@@ -209,10 +305,10 @@ function FilterChips({ label, options, selected, onSelect }: FilterChipsProps) {
       </ScrollView>
     </View>
   );
-}
+});
 
 // ─── Section: Doctors ─────────────────────────────────────────────────────────
-function DoctorsSection() {
+const DoctorsSection = React.memo(function DoctorsSection() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState("");
@@ -223,46 +319,119 @@ function DoctorsSection() {
   const [language, setLanguage] = useState("All");
   const [showFilters, setShowFilters] = useState(false);
 
-  const filtered = DOCTORS.filter((d) => {
-    const q = search.toLowerCase();
-    const matchSearch = !q || d.name.toLowerCase().includes(q) || d.specialty.toLowerCase().includes(q);
-    const matchSpecialty = specialty === "All" || d.specialty === specialty;
-    const matchAvailability = availability === "All" || d.status === availability.toLowerCase();
-    const matchRating =
-      ratingFilter === "All" ||
-      (ratingFilter === "4.9+" && d.rating >= 4.9) ||
-      (ratingFilter === "4.8+" && d.rating >= 4.8) ||
-      (ratingFilter === "4.5+" && d.rating >= 4.5);
-    const matchLanguage = language === "All" || d.languages.includes(language);
-    return matchSearch && matchSpecialty && matchAvailability && matchRating && matchLanguage;
-  });
+  const filtered = useMemo(
+    () =>
+      DOCTORS.filter((d) => {
+        const q = search.toLowerCase();
+        const matchSearch =
+          !q ||
+          d.name.toLowerCase().includes(q) ||
+          d.specialty.toLowerCase().includes(q);
+        const matchSpecialty =
+          specialty === "All" || d.specialty === specialty;
+        const matchAvailability =
+          availability === "All" ||
+          d.status === availability.toLowerCase();
+        const matchRating =
+          ratingFilter === "All" ||
+          (ratingFilter === "4.9+" && d.rating >= 4.9) ||
+          (ratingFilter === "4.8+" && d.rating >= 4.8) ||
+          (ratingFilter === "4.5+" && d.rating >= 4.5);
+        const matchLanguage =
+          language === "All" || d.languages.includes(language);
+        return (
+          matchSearch &&
+          matchSpecialty &&
+          matchAvailability &&
+          matchRating &&
+          matchLanguage
+        );
+      }),
+    [search, specialty, availability, ratingFilter, language]
+  );
 
-  const activeFilterCount = [specialty, consultType, availability, ratingFilter, language].filter((v) => v !== "All").length;
+  const activeFilterCount = useMemo(
+    () =>
+      [specialty, consultType, availability, ratingFilter, language].filter(
+        (v) => v !== "All"
+      ).length,
+    [specialty, consultType, availability, ratingFilter, language]
+  );
+
+  const clearFilters = useCallback(() => {
+    setSpecialty("All");
+    setConsultType("All");
+    setAvailability("All");
+    setRatingFilter("All");
+    setLanguage("All");
+  }, []);
+
+  const renderDoctor = useCallback(
+    ({ item }: { item: (typeof DOCTORS)[0] }) => <DoctorCard doctor={item} />,
+    []
+  );
+
+  const onlineCount = useMemo(
+    () => DOCTORS.filter((d) => d.status === "online").length,
+    []
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header */}
-      <View style={[styles.sectionHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+      <View
+        style={[
+          styles.sectionHeader,
+          { backgroundColor: colors.card, borderBottomColor: colors.border },
+        ]}
+      >
         <View style={styles.sectionHeadingRow}>
-          <Text style={[styles.sectionHeading, { color: colors.foreground }]}>Find Doctors</Text>
+          <Text style={[styles.sectionHeading, { color: colors.foreground }]}>
+            Find Doctors
+          </Text>
           <Pressable
             style={[
               styles.filterToggleBtn,
               {
-                backgroundColor: activeFilterCount > 0 ? colors.primary : colors.muted,
-                borderColor: activeFilterCount > 0 ? colors.primary : colors.border,
+                backgroundColor:
+                  activeFilterCount > 0 ? colors.primary : colors.muted,
+                borderColor:
+                  activeFilterCount > 0 ? colors.primary : colors.border,
               },
             ]}
             onPress={() => setShowFilters((v) => !v)}
           >
-            <Ionicons name="options-outline" size={15} color={activeFilterCount > 0 ? "#fff" : colors.mutedForeground} />
-            <Text style={[styles.filterToggleText, { color: activeFilterCount > 0 ? "#fff" : colors.mutedForeground }]}>
+            <Ionicons
+              name="options-outline"
+              size={15}
+              color={
+                activeFilterCount > 0 ? "#fff" : colors.mutedForeground
+              }
+            />
+            <Text
+              style={[
+                styles.filterToggleText,
+                {
+                  color:
+                    activeFilterCount > 0 ? "#fff" : colors.mutedForeground,
+                },
+              ]}
+            >
               Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
             </Text>
           </Pressable>
         </View>
-        <View style={[styles.searchBar, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-          <Ionicons name="search-outline" size={16} color={colors.mutedForeground} />
+        <View
+          style={[
+            styles.searchBar,
+            { backgroundColor: colors.muted, borderColor: colors.border },
+          ]}
+        >
+          <Ionicons
+            name="search-outline"
+            size={16}
+            color={colors.mutedForeground}
+          />
           <TextInput
             style={[styles.searchInput, { color: colors.foreground }]}
             placeholder="Search by name or specialty..."
@@ -272,7 +441,11 @@ function DoctorsSection() {
           />
           {search.length > 0 && (
             <Pressable onPress={() => setSearch("")}>
-              <Ionicons name="close-circle" size={16} color={colors.mutedForeground} />
+              <Ionicons
+                name="close-circle"
+                size={16}
+                color={colors.mutedForeground}
+              />
             </Pressable>
           )}
         </View>
@@ -280,24 +453,57 @@ function DoctorsSection() {
         {/* Filter Panel */}
         {showFilters && (
           <View style={[styles.filterPanel, { borderTopColor: colors.border }]}>
-            <FilterChips label="Specialty" options={SPECIALTY_FILTERS} selected={specialty} onSelect={setSpecialty} />
-            <FilterChips label="Consultation Type" options={CONSULT_TYPE_FILTERS} selected={consultType} onSelect={setConsultType} />
-            <FilterChips label="Availability" options={AVAILABILITY_FILTERS} selected={availability} onSelect={setAvailability} />
-            <FilterChips label="Rating" options={RATING_FILTERS} selected={ratingFilter} onSelect={setRatingFilter} />
-            <FilterChips label="Language" options={LANGUAGE_FILTERS} selected={language} onSelect={setLanguage} />
+            <FilterChips
+              label="Specialty"
+              options={SPECIALTY_FILTERS}
+              selected={specialty}
+              onSelect={setSpecialty}
+            />
+            <FilterChips
+              label="Consultation Type"
+              options={CONSULT_TYPE_FILTERS}
+              selected={consultType}
+              onSelect={setConsultType}
+            />
+            <FilterChips
+              label="Availability"
+              options={AVAILABILITY_FILTERS}
+              selected={availability}
+              onSelect={setAvailability}
+            />
+            <FilterChips
+              label="Rating"
+              options={RATING_FILTERS}
+              selected={ratingFilter}
+              onSelect={setRatingFilter}
+            />
+            <FilterChips
+              label="Language"
+              options={LANGUAGE_FILTERS}
+              selected={language}
+              onSelect={setLanguage}
+            />
             {activeFilterCount > 0 && (
               <Pressable
-                style={[styles.clearFiltersBtn, { borderColor: colors.border }]}
-                onPress={() => {
-                  setSpecialty("All");
-                  setConsultType("All");
-                  setAvailability("All");
-                  setRatingFilter("All");
-                  setLanguage("All");
-                }}
+                style={[
+                  styles.clearFiltersBtn,
+                  { borderColor: colors.border },
+                ]}
+                onPress={clearFilters}
               >
-                <Ionicons name="refresh-outline" size={13} color={colors.mutedForeground} />
-                <Text style={[styles.clearFiltersText, { color: colors.mutedForeground }]}>Clear all filters</Text>
+                <Ionicons
+                  name="refresh-outline"
+                  size={13}
+                  color={colors.mutedForeground}
+                />
+                <Text
+                  style={[
+                    styles.clearFiltersText,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
+                  Clear all filters
+                </Text>
               </Pressable>
             )}
           </View>
@@ -305,14 +511,21 @@ function DoctorsSection() {
       </View>
 
       {/* Results count */}
-      <View style={[styles.resultsRow, { borderBottomColor: colors.border }]}>
+      <View
+        style={[styles.resultsRow, { borderBottomColor: colors.border }]}
+      >
         <Text style={[styles.resultsText, { color: colors.mutedForeground }]}>
-          {filtered.length} verified doctor{filtered.length !== 1 ? "s" : ""} found
+          {filtered.length} verified doctor{filtered.length !== 1 ? "s" : ""}{" "}
+          found
         </Text>
         <View style={[styles.onlinePill, { backgroundColor: "#22C55E18" }]}>
-          <View style={[styles.onlineDot, { backgroundColor: "#22C55E" }]} />
-          <Text style={[styles.onlinePillText, { color: "#16A34A" }]}>
-            {DOCTORS.filter((d) => d.status === "online").length} Online
+          <View
+            style={[styles.onlineDot, { backgroundColor: "#22C55E" }]}
+          />
+          <Text
+            style={[styles.onlinePillText, { color: "#16A34A" }]}
+          >
+            {onlineCount} Online
           </Text>
         </View>
       </View>
@@ -320,34 +533,80 @@ function DoctorsSection() {
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: insets.bottom + 100 },
+        ]}
         showsVerticalScrollIndicator={false}
-        renderItem={({ item }) => <DoctorCard doctor={item} />}
-        ListEmptyComponent={<EmptyState icon="person-outline" message="No doctors match your filters" />}
+        renderItem={renderDoctor}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        ListEmptyComponent={
+          <EmptyState icon="person-outline" message="No doctors match your filters" />
+        }
       />
     </View>
   );
-}
+});
 
 // ─── Section: Hospitals ───────────────────────────────────────────────────────
-function HospitalsSection() {
+const HospitalsSection = React.memo(function HospitalsSection() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState("");
   const [type, setType] = useState("All");
-  const types = ["All", "General Hospital", "Private Clinic", "Teaching Hospital", "Specialist Hospital"];
-  const filtered = HOSPITALS.filter((h) => {
-    const q = search.toLowerCase();
-    const matchSearch = h.name.toLowerCase().includes(q) || h.location.toLowerCase().includes(q);
-    const matchType = type === "All" || h.type === type;
-    return matchSearch && matchType;
-  });
+  const types = useMemo(
+    () => [
+      "All",
+      "General Hospital",
+      "Private Clinic",
+      "Teaching Hospital",
+      "Specialist Hospital",
+    ],
+    []
+  );
+  const filtered = useMemo(
+    () =>
+      HOSPITALS.filter((h) => {
+        const q = search.toLowerCase();
+        const matchSearch =
+          h.name.toLowerCase().includes(q) ||
+          h.location.toLowerCase().includes(q);
+        const matchType = type === "All" || h.type === type;
+        return matchSearch && matchType;
+      }),
+    [search, type]
+  );
+
+  const renderHospital = useCallback(
+    ({ item }: { item: (typeof HOSPITALS)[0] }) => (
+      <HospitalCard hospital={item} />
+    ),
+    []
+  );
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <View style={[styles.sectionHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <Text style={[styles.sectionHeading, { color: colors.foreground }]}>Hospitals</Text>
-        <View style={[styles.searchBar, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-          <Ionicons name="search-outline" size={16} color={colors.mutedForeground} />
+      <View
+        style={[
+          styles.sectionHeader,
+          { backgroundColor: colors.card, borderBottomColor: colors.border },
+        ]}
+      >
+        <Text style={[styles.sectionHeading, { color: colors.foreground }]}>
+          Hospitals
+        </Text>
+        <View
+          style={[
+            styles.searchBar,
+            { backgroundColor: colors.muted, borderColor: colors.border },
+          ]}
+        >
+          <Ionicons
+            name="search-outline"
+            size={16}
+            color={colors.mutedForeground}
+          />
           <TextInput
             style={[styles.searchInput, { color: colors.foreground }]}
             placeholder="Search hospitals..."
@@ -356,14 +615,34 @@ function HospitalsSection() {
             onChangeText={setSearch}
           />
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterRow}
+          keyboardShouldPersistTaps="handled"
+        >
           {types.map((t) => (
             <Pressable
               key={t}
-              style={[styles.chip, { backgroundColor: type === t ? colors.primary : colors.muted, borderColor: type === t ? colors.primary : colors.border }]}
+              style={[
+                styles.chip,
+                {
+                  backgroundColor:
+                    type === t ? colors.primary : colors.muted,
+                  borderColor:
+                    type === t ? colors.primary : colors.border,
+                },
+              ]}
               onPress={() => setType(t)}
             >
-              <Text style={[styles.chipText, { color: type === t ? "#fff" : colors.mutedForeground }]}>{t}</Text>
+              <Text
+                style={[
+                  styles.chipText,
+                  { color: type === t ? "#fff" : colors.mutedForeground },
+                ]}
+              >
+                {t}
+              </Text>
             </Pressable>
           ))}
         </ScrollView>
@@ -371,32 +650,67 @@ function HospitalsSection() {
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: insets.bottom + 100 },
+        ]}
         showsVerticalScrollIndicator={false}
-        renderItem={({ item }) => <HospitalCard hospital={item} />}
-        ListEmptyComponent={<EmptyState icon="business-outline" message="No hospitals found" />}
+        renderItem={renderHospital}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        ListEmptyComponent={
+          <EmptyState icon="business-outline" message="No hospitals found" />
+        }
       />
     </View>
   );
-}
+});
 
 // ─── Section: Labs ────────────────────────────────────────────────────────────
-function LabsSection() {
+const LabsSection = React.memo(function LabsSection() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState("");
-  const filtered = LABS.filter(
-    (l) =>
-      l.name.toLowerCase().includes(search.toLowerCase()) ||
-      l.location.toLowerCase().includes(search.toLowerCase()) ||
-      l.availableTests.some((t) => t.name.toLowerCase().includes(search.toLowerCase()))
+  const filtered = useMemo(
+    () =>
+      LABS.filter(
+        (l) =>
+          l.name.toLowerCase().includes(search.toLowerCase()) ||
+          l.location.toLowerCase().includes(search.toLowerCase()) ||
+          l.availableTests.some((t) =>
+            t.name.toLowerCase().includes(search.toLowerCase())
+          )
+      ),
+    [search]
   );
+
+  const renderLab = useCallback(
+    ({ item }: { item: (typeof LABS)[0] }) => <LabCard lab={item} />,
+    []
+  );
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <View style={[styles.sectionHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <Text style={[styles.sectionHeading, { color: colors.foreground }]}>Diagnostic Labs</Text>
-        <View style={[styles.searchBar, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-          <Ionicons name="search-outline" size={16} color={colors.mutedForeground} />
+      <View
+        style={[
+          styles.sectionHeader,
+          { backgroundColor: colors.card, borderBottomColor: colors.border },
+        ]}
+      >
+        <Text style={[styles.sectionHeading, { color: colors.foreground }]}>
+          Diagnostic Labs
+        </Text>
+        <View
+          style={[
+            styles.searchBar,
+            { backgroundColor: colors.muted, borderColor: colors.border },
+          ]}
+        >
+          <Ionicons
+            name="search-outline"
+            size={16}
+            color={colors.mutedForeground}
+          />
           <TextInput
             style={[styles.searchInput, { color: colors.foreground }]}
             placeholder="Search labs or tests..."
@@ -409,31 +723,66 @@ function LabsSection() {
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: insets.bottom + 100 },
+        ]}
         showsVerticalScrollIndicator={false}
-        renderItem={({ item }) => <LabCard lab={item} />}
-        ListEmptyComponent={<EmptyState icon="flask-outline" message="No labs found" />}
+        renderItem={renderLab}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        ListEmptyComponent={
+          <EmptyState icon="flask-outline" message="No labs found" />
+        }
       />
     </View>
   );
-}
+});
 
 // ─── Section: Pharmacy ────────────────────────────────────────────────────────
-function PharmacySection() {
+const PharmacySection = React.memo(function PharmacySection() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState("");
-  const filtered = PHARMACIES.filter(
-    (p) =>
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.location.toLowerCase().includes(search.toLowerCase())
+  const filtered = useMemo(
+    () =>
+      PHARMACIES.filter(
+        (p) =>
+          p.name.toLowerCase().includes(search.toLowerCase()) ||
+          p.location.toLowerCase().includes(search.toLowerCase())
+      ),
+    [search]
   );
+
+  const renderPharmacy = useCallback(
+    ({ item }: { item: (typeof PHARMACIES)[0] }) => (
+      <PharmacyCard pharmacy={item} />
+    ),
+    []
+  );
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <View style={[styles.sectionHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <Text style={[styles.sectionHeading, { color: colors.foreground }]}>Pharmacies</Text>
-        <View style={[styles.searchBar, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-          <Ionicons name="search-outline" size={16} color={colors.mutedForeground} />
+      <View
+        style={[
+          styles.sectionHeader,
+          { backgroundColor: colors.card, borderBottomColor: colors.border },
+        ]}
+      >
+        <Text style={[styles.sectionHeading, { color: colors.foreground }]}>
+          Pharmacies
+        </Text>
+        <View
+          style={[
+            styles.searchBar,
+            { backgroundColor: colors.muted, borderColor: colors.border },
+          ]}
+        >
+          <Ionicons
+            name="search-outline"
+            size={16}
+            color={colors.mutedForeground}
+          />
           <TextInput
             style={[styles.searchInput, { color: colors.foreground }]}
             placeholder="Search pharmacies..."
@@ -442,41 +791,84 @@ function PharmacySection() {
             onChangeText={setSearch}
           />
         </View>
-        <View style={[styles.safetyBanner, { backgroundColor: "#FEF9C3", borderColor: "#FDE047" }]}>
+        <View
+          style={[
+            styles.safetyBanner,
+            { backgroundColor: "#FEF9C3", borderColor: "#FDE047" },
+          ]}
+        >
           <Ionicons name="warning-outline" size={14} color="#92400E" />
-          <Text style={[styles.safetyText, { color: "#92400E" }]}>
-            Only take medicines as prescribed by a qualified healthcare professional.
+          <Text
+            style={[styles.safetyText, { color: "#92400E" }]}
+          >
+            Only take medicines as prescribed by a qualified healthcare
+            professional.
           </Text>
         </View>
       </View>
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: insets.bottom + 100 },
+        ]}
         showsVerticalScrollIndicator={false}
-        renderItem={({ item }) => <PharmacyCard pharmacy={item} />}
-        ListEmptyComponent={<EmptyState icon="medical-outline" message="No pharmacies found" />}
+        renderItem={renderPharmacy}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        ListEmptyComponent={
+          <EmptyState icon="medical-outline" message="No pharmacies found" />
+        }
       />
     </View>
   );
-}
+});
 
 // ─── Section: Education ───────────────────────────────────────────────────────
-function EducationSection() {
+const EducationSection = React.memo(function EducationSection() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState("");
-  const filtered = ARTICLES.filter(
-    (a) =>
-      a.title.toLowerCase().includes(search.toLowerCase()) ||
-      a.category.toLowerCase().includes(search.toLowerCase())
+  const filtered = useMemo(
+    () =>
+      ARTICLES.filter(
+        (a) =>
+          a.title.toLowerCase().includes(search.toLowerCase()) ||
+          a.category.toLowerCase().includes(search.toLowerCase())
+      ),
+    [search]
   );
+
+  const renderArticle = useCallback(
+    ({ item }: { item: (typeof ARTICLES)[0] }) => (
+      <EducationCard article={item} />
+    ),
+    []
+  );
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <View style={[styles.sectionHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <Text style={[styles.sectionHeading, { color: colors.foreground }]}>Health Education</Text>
-        <View style={[styles.searchBar, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-          <Ionicons name="search-outline" size={16} color={colors.mutedForeground} />
+      <View
+        style={[
+          styles.sectionHeader,
+          { backgroundColor: colors.card, borderBottomColor: colors.border },
+        ]}
+      >
+        <Text style={[styles.sectionHeading, { color: colors.foreground }]}>
+          Health Education
+        </Text>
+        <View
+          style={[
+            styles.searchBar,
+            { backgroundColor: colors.muted, borderColor: colors.border },
+          ]}
+        >
+          <Ionicons
+            name="search-outline"
+            size={16}
+            color={colors.mutedForeground}
+          />
           <TextInput
             style={[styles.searchInput, { color: colors.foreground }]}
             placeholder="Search articles..."
@@ -489,25 +881,40 @@ function EducationSection() {
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: insets.bottom + 100 },
+        ]}
         showsVerticalScrollIndicator={false}
-        renderItem={({ item }) => <EducationCard article={item} />}
-        ListEmptyComponent={<EmptyState icon="book-outline" message="No articles found" />}
+        renderItem={renderArticle}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        ListEmptyComponent={
+          <EmptyState icon="book-outline" message="No articles found" />
+        }
       />
     </View>
   );
-}
+});
 
 // ─── Empty State ──────────────────────────────────────────────────────────────
-function EmptyState({ icon, message }: { icon: string; message: string }) {
+const EmptyState = React.memo(function EmptyState({
+  icon,
+  message,
+}: {
+  icon: string;
+  message: string;
+}) {
   const colors = useColors();
   return (
     <View style={styles.emptyState}>
       <Ionicons name={icon as never} size={48} color={colors.mutedForeground} />
-      <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>{message}</Text>
+      <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+        {message}
+      </Text>
     </View>
   );
-}
+});
 
 // ─── Main Home Screen ─────────────────────────────────────────────────────────
 export default function HomeScreen() {
@@ -515,51 +922,78 @@ export default function HomeScreen() {
   const [activeIndex, setActiveIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
 
-  function scrollToSection(index: number) {
+  const scrollToSection = useCallback((index: number) => {
     scrollRef.current?.scrollTo({ x: index * SCREEN_WIDTH, animated: true });
     setActiveIndex(index);
-  }
+  }, []);
 
-  function handleScrollEnd(e: any) {
-    const index = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+  const handleScrollEnd = useCallback((e: any) => {
+    const index = Math.round(
+      e.nativeEvent.contentOffset.x / SCREEN_WIDTH
+    );
     setActiveIndex(index);
-  }
+  }, []);
 
-  const sections = [
-    <ChatSection
-      onNavigateToDoctors={() => scrollToSection(2)}
-      onNavigateToHospitals={() => scrollToSection(3)}
-    />,
-    <ProfileSection />,
-    <DoctorsSection />,
-    <HospitalsSection />,
-    <LabsSection />,
-    <PharmacySection />,
-    <EducationSection />,
-  ];
+  // Stable section components — memoized so they don't remount on re-render.
+  // scrollToSection is stable (useCallback with no deps that change), so
+  // ChatSection's props never change and React.memo bails out every re-render.
+  const sections = useMemo(
+    () => [
+      <ChatSection
+        onNavigateToDoctors={() => scrollToSection(2)}
+        onNavigateToHospitals={() => scrollToSection(3)}
+      />,
+      <ProfileSection />,
+      <DoctorsSection />,
+      <HospitalsSection />,
+      <LabsSection />,
+      <PharmacySection />,
+      <EducationSection />,
+    ],
+    // scrollToSection is stable; this array only rebuilds on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView
-        ref={scrollRef}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        scrollEventThrottle={16}
-        onMomentumScrollEnd={handleScrollEnd}
-        style={{ flex: 1 }}
-        scrollEnabled
-        decelerationRate="fast"
-        nestedScrollEnabled
-      >
-        {sections.map((section, index) => (
-          <View key={NAV_SECTIONS[index].key} style={{ width: SCREEN_WIDTH, flex: 1 }}>
-            {section}
-          </View>
-        ))}
-      </ScrollView>
-      <HomeNavBar activeIndex={activeIndex} onPress={scrollToSection} />
-    </View>
+    // KeyboardAvoidingView at the ROOT — single source of truth for keyboard
+    // layout. All child sections (including ChatSection) rely on this instead
+    // of having their own nested KAVs, which caused the horizontal pager to
+    // relayout and shake every time the keyboard opened.
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      // No keyboardVerticalOffset needed: there is no header above this screen.
+    >
+      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+        <ScrollView
+          ref={scrollRef}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          scrollEventThrottle={16}
+          onMomentumScrollEnd={handleScrollEnd}
+          style={{ flex: 1 }}
+          decelerationRate="fast"
+          nestedScrollEnabled
+          // Prevent the horizontal pager from eating taps that should reach
+          // child inputs/buttons, and stop the keyboard from dismissing when
+          // the user swipes horizontally between sections.
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="none"
+        >
+          {sections.map((section, index) => (
+            <View
+              key={NAV_SECTIONS[index].key}
+              style={{ width: SCREEN_WIDTH, flex: 1 }}
+            >
+              {section}
+            </View>
+          ))}
+        </ScrollView>
+        <HomeNavBar activeIndex={activeIndex} onPress={scrollToSection} />
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -568,189 +1002,324 @@ const styles = StyleSheet.create({
 
   // Chat styles
   chatList: { paddingVertical: 12 },
-  typingRow: { paddingHorizontal: 16, marginBottom: 8 },
+  typingRow: { paddingHorizontal: 16, marginBottom: 4 },
   typingBubble: {
-    borderRadius: 18, borderBottomLeftRadius: 4,
-    paddingHorizontal: 14, paddingVertical: 12,
-    borderWidth: 1, alignSelf: "flex-start",
+    borderRadius: 18,
+    borderBottomLeftRadius: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    alignSelf: "flex-start",
   },
   dotsRow: { flexDirection: "row", gap: 4, alignItems: "center" },
   dot: { width: 7, height: 7, borderRadius: 4, opacity: 0.6 },
   inputBar: {
-    flexDirection: "row", alignItems: "flex-end",
-    paddingHorizontal: 12, paddingTop: 8,
-    borderTopWidth: 1, gap: 10,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    gap: 10,
   },
   input: {
-    flex: 1, minHeight: 44, maxHeight: 100,
-    borderRadius: 22, borderWidth: 1,
-    paddingHorizontal: 16, paddingVertical: 10,
-    fontSize: 15, fontFamily: "Inter_400Regular",
+    flex: 1,
+    minHeight: 44,
+    maxHeight: 100,
+    borderRadius: 22,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    fontSize: 15,
+    fontFamily: "Inter_400Regular",
   },
   sendBtn: {
-    width: 44, height: 44, borderRadius: 22,
-    alignItems: "center", justifyContent: "center",
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   // Profile styles
   guestWrap: {
-    flex: 1, alignItems: "center", justifyContent: "center",
-    padding: 32, gap: 14,
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 32,
+    gap: 14,
   },
   guestIcon: {
-    width: 110, height: 110, borderRadius: 55,
-    alignItems: "center", justifyContent: "center",
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    alignItems: "center",
+    justifyContent: "center",
   },
   guestTitle: {
-    fontSize: 22, fontWeight: "700" as const, fontFamily: "Inter_700Bold",
+    fontSize: 22,
+    fontWeight: "700" as const,
+    fontFamily: "Inter_700Bold",
     textAlign: "center",
   },
   guestSub: {
-    fontSize: 14, fontFamily: "Inter_400Regular",
-    textAlign: "center", lineHeight: 20,
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+    lineHeight: 20,
   },
   primaryBtn: {
-    width: "100%", paddingVertical: 15, borderRadius: 50, alignItems: "center",
+    width: "100%",
+    paddingVertical: 15,
+    borderRadius: 50,
+    alignItems: "center",
   },
   primaryBtnText: {
-    color: "#fff", fontSize: 16,
-    fontWeight: "700" as const, fontFamily: "Inter_700Bold",
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700" as const,
+    fontFamily: "Inter_700Bold",
   },
   outlineBtn: {
-    width: "100%", paddingVertical: 15, borderRadius: 50,
-    alignItems: "center", borderWidth: 2,
+    width: "100%",
+    paddingVertical: 15,
+    borderRadius: 50,
+    alignItems: "center",
+    borderWidth: 2,
   },
   outlineBtnText: {
-    fontSize: 16, fontWeight: "600" as const, fontFamily: "Inter_600SemiBold",
+    fontSize: 16,
+    fontWeight: "600" as const,
+    fontFamily: "Inter_600SemiBold",
   },
   profileHero: {
-    alignItems: "center", paddingTop: 32, paddingBottom: 28, paddingHorizontal: 16,
+    alignItems: "center",
+    paddingTop: 32,
+    paddingBottom: 28,
+    paddingHorizontal: 16,
   },
   avatarCircle: {
-    width: 76, height: 76, borderRadius: 38,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     backgroundColor: "rgba(255,255,255,0.25)",
-    alignItems: "center", justifyContent: "center", marginBottom: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
   },
   avatarText: {
-    fontSize: 34, fontWeight: "700" as const, color: "#fff", fontFamily: "Inter_700Bold",
+    fontSize: 34,
+    fontWeight: "700" as const,
+    color: "#fff",
+    fontFamily: "Inter_700Bold",
   },
   profileName: {
-    fontSize: 20, fontWeight: "700" as const, color: "#fff", fontFamily: "Inter_700Bold",
+    fontSize: 20,
+    fontWeight: "700" as const,
+    color: "#fff",
+    fontFamily: "Inter_700Bold",
   },
   profileEmail: {
-    fontSize: 13, color: "rgba(255,255,255,0.8)", fontFamily: "Inter_400Regular", marginTop: 4,
+    fontSize: 13,
+    color: "rgba(255,255,255,0.8)",
+    fontFamily: "Inter_400Regular",
+    marginTop: 4,
   },
   rolePill: {
-    backgroundColor: "rgba(255,255,255,0.2)", paddingHorizontal: 14,
-    paddingVertical: 5, borderRadius: 20, marginTop: 10,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: 20,
+    marginTop: 10,
   },
   rolePillText: {
-    color: "#fff", fontSize: 11,
-    fontWeight: "700" as const, fontFamily: "Inter_700Bold", letterSpacing: 1,
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "700" as const,
+    fontFamily: "Inter_700Bold",
+    letterSpacing: 1,
   },
   profileRow: {
-    flexDirection: "row", alignItems: "center", gap: 12,
-    padding: 14, borderRadius: 12, borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
   },
   profileRowIcon: {
-    width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center",
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
   },
   profileRowLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
   profileRowValue: {
-    fontSize: 14, fontWeight: "500" as const, fontFamily: "Inter_500Medium",
+    fontSize: 14,
+    fontWeight: "500" as const,
+    fontFamily: "Inter_500Medium",
   },
   logoutBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 8, padding: 14, borderRadius: 12, borderWidth: 1, marginTop: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginTop: 4,
   },
 
   // Section shared styles
   sectionHeader: {
-    paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10,
-    borderBottomWidth: 1, gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    gap: 10,
   },
   sectionHeading: {
-    fontSize: 20, fontWeight: "700" as const, fontFamily: "Inter_700Bold",
+    fontSize: 20,
+    fontWeight: "700" as const,
+    fontFamily: "Inter_700Bold",
   },
   searchBar: {
-    flexDirection: "row", alignItems: "center",
-    borderRadius: 10, borderWidth: 1,
-    paddingHorizontal: 10, paddingVertical: 9, gap: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    gap: 8,
   },
   searchInput: {
-    flex: 1, fontSize: 14, fontFamily: "Inter_400Regular",
+    flex: 1,
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
   },
   filterRow: { gap: 8, paddingBottom: 2 },
   chip: {
-    paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: 20, borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
   },
   chipText: {
-    fontSize: 12, fontWeight: "500" as const, fontFamily: "Inter_500Medium",
+    fontSize: 12,
+    fontWeight: "500" as const,
+    fontFamily: "Inter_500Medium",
   },
   listContent: { padding: 14 },
   safetyBanner: {
-    flexDirection: "row", alignItems: "flex-start", gap: 6,
-    padding: 10, borderRadius: 10, borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
   },
   safetyText: {
-    fontSize: 12, fontFamily: "Inter_500Medium",
-    fontWeight: "500" as const, flex: 1, lineHeight: 17,
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    fontWeight: "500" as const,
+    flex: 1,
+    lineHeight: 17,
   },
   emptyState: {
-    alignItems: "center", paddingVertical: 60, gap: 12,
+    alignItems: "center",
+    paddingVertical: 60,
+    gap: 12,
   },
   emptyText: {
-    fontSize: 16, fontFamily: "Inter_600SemiBold", fontWeight: "600" as const,
+    fontSize: 16,
+    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600" as const,
   },
 
   // Doctors filter styles
   sectionHeadingRow: {
-    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   filterToggleBtn: {
-    flexDirection: "row", alignItems: "center", gap: 5,
-    paddingHorizontal: 10, paddingVertical: 6,
-    borderRadius: 20, borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
   },
   filterToggleText: {
-    fontSize: 12, fontFamily: "Inter_600SemiBold", fontWeight: "600" as const,
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600" as const,
   },
   filterPanel: {
-    borderTopWidth: 1, paddingTop: 10, gap: 10, marginTop: 4,
+    borderTopWidth: 1,
+    paddingTop: 10,
+    gap: 10,
+    marginTop: 4,
   },
   filterGroup: { gap: 6 },
   filterLabel: {
-    fontSize: 11, fontFamily: "Inter_600SemiBold", fontWeight: "600" as const,
-    textTransform: "uppercase" as const, letterSpacing: 0.5,
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600" as const,
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.5,
   },
   filterChip: {
-    paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: 20, borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
   },
   filterChipText: {
-    fontSize: 12, fontFamily: "Inter_500Medium", fontWeight: "500" as const,
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    fontWeight: "500" as const,
   },
   clearFiltersBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 5, paddingVertical: 8, borderRadius: 8, borderWidth: 1, marginTop: 2,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 2,
   },
   clearFiltersText: {
-    fontSize: 12, fontFamily: "Inter_500Medium", fontWeight: "500" as const,
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    fontWeight: "500" as const,
   },
   resultsRow: {
-    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-    paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 0,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 0,
   },
   resultsText: {
-    fontSize: 12, fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
   },
   onlinePill: {
-    flexDirection: "row", alignItems: "center", gap: 5,
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
   },
   onlineDot: { width: 6, height: 6, borderRadius: 3 },
   onlinePillText: {
-    fontSize: 11, fontFamily: "Inter_600SemiBold", fontWeight: "600" as const,
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600" as const,
   },
 });
