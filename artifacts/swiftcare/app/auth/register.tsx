@@ -18,10 +18,9 @@ import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 
 const SEX_OPTIONS = ["Male", "Female", "Other", "Prefer not to say"];
-const ROLE_OPTIONS: { value: "user" | "doctor" | "admin"; label: string }[] = [
+const ROLE_OPTIONS: { value: "user" | "doctor"; label: string }[] = [
   { value: "user", label: "Patient" },
   { value: "doctor", label: "Doctor" },
-  { value: "admin", label: "Admin" },
 ];
 
 export default function RegisterScreen() {
@@ -37,7 +36,7 @@ export default function RegisterScreen() {
   const [sex, setSex] = useState("");
   const [stateOfOrigin, setStateOfOrigin] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
-  const [role, setRole] = useState<"user" | "doctor" | "admin">("user");
+  const [role, setRole] = useState<"user" | "doctor">("user");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -62,7 +61,7 @@ export default function RegisterScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsLoading(true);
     try {
-      const success = await register({
+      const result = await register({
         fullName: fullName.trim(),
         email: email.trim(),
         password,
@@ -71,14 +70,14 @@ export default function RegisterScreen() {
         mobileNumber: mobileNumber.trim(),
         role,
       });
-      if (success) {
+      if (result.success) {
         Alert.alert(
           "Account Created!",
           "Welcome to SwiftCare. Your account has been created successfully.",
           [{ text: "Continue", onPress: () => router.replace("/(tabs)" as never) }]
         );
       } else {
-        Alert.alert("Registration Failed", "An account with this email already exists.");
+        Alert.alert("Registration Failed", result.error ?? "Could not create account. Please try again.");
       }
     } finally {
       setIsLoading(false);

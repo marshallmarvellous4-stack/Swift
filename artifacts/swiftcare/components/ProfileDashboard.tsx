@@ -103,8 +103,8 @@ function ProfileHeader() {
       <View style={styles.pillsRow}>
         {[
           { icon: "water-outline", label: MEDICAL_PROFILE.bloodGroup },
-          { icon: "person-outline", label: user.sex },
-          { icon: "location-outline", label: user.stateOfOrigin },
+          { icon: "person-outline", label: user.sex ?? "—" },
+          { icon: "location-outline", label: user.stateOfOrigin ?? "—" },
         ].map((p) => (
           <View key={p.label} style={styles.pill}>
             <Ionicons name={p.icon as never} size={12} color="rgba(255,255,255,0.8)" />

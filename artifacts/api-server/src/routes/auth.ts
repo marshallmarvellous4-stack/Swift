@@ -8,7 +8,7 @@ const router: IRouter = Router();
 
 // POST /api/auth/register
 router.post("/auth/register", async (req, res): Promise<void> => {
-  const { fullName, email, password, sex, stateOfOrigin, mobileNumber } =
+  const { fullName, email, password, sex, stateOfOrigin, mobileNumber, role } =
     req.body as Record<string, string>;
 
   if (!fullName || !email || !password) {
@@ -17,6 +17,10 @@ router.post("/auth/register", async (req, res): Promise<void> => {
       .json({ error: "fullName, email and password are required" });
     return;
   }
+
+  // Validate role — only user/doctor allowed via self-registration
+  const safeRole: "user" | "doctor" =
+    role === "doctor" ? "doctor" : "user";
 
   const [existing] = await db
     .select({ id: usersTable.id })
@@ -36,6 +40,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
       fullName,
       email: email.toLowerCase(),
       passwordHash,
+      role: safeRole,
       sex: sex ?? null,
       stateOfOrigin: stateOfOrigin ?? null,
       mobileNumber: mobileNumber ?? null,

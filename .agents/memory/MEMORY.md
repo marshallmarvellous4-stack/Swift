@@ -1,0 +1,1 @@
+- [API auth connection](api-auth-connection.md) — mobile app talks to API via EXPO_PUBLIC_DOMAIN; token in AsyncStorage; session restored on boot via /auth/me

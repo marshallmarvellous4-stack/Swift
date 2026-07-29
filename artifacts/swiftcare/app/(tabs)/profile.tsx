@@ -164,9 +164,9 @@ function ProfileView() {
         </Text>
         <MenuItem icon="person-outline" label="Full Name" value={user?.fullName} />
         <MenuItem icon="mail-outline" label="Email" value={user?.email} />
-        <MenuItem icon="call-outline" label="Phone" value={user?.mobileNumber} />
-        <MenuItem icon="people-outline" label="Gender" value={user?.sex} />
-        <MenuItem icon="location-outline" label="State" value={user?.stateOfOrigin} />
+        <MenuItem icon="call-outline" label="Phone" value={user?.mobileNumber ?? undefined} />
+        <MenuItem icon="people-outline" label="Gender" value={user?.sex ?? undefined} />
+        <MenuItem icon="location-outline" label="State" value={user?.stateOfOrigin ?? undefined} />
 
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginTop: 8 }]}>
           ACTIVITY

@@ -42,11 +42,11 @@ export default function LoginScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setIsLoading(true);
     try {
-      const success = await login(email.trim(), password);
-      if (success) {
+      const result = await login(email.trim(), password);
+      if (result.success) {
         router.replace("/(tabs)" as never);
       } else {
-        Alert.alert("Login Failed", "Incorrect email or password. Please try again.");
+        Alert.alert("Login Failed", result.error ?? "Incorrect email or password. Please try again.");
       }
     } finally {
       setIsLoading(false);
