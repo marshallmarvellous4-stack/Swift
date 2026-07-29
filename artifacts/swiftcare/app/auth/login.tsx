@@ -135,6 +135,11 @@ export default function LoginScreen() {
                 setErrors((e) => ({ ...e, password: undefined }));
               }}
               secureTextEntry={!showPassword}
+              autoCorrect={false}
+              autoCapitalize="none"
+              autoComplete="current-password"
+              returnKeyType="go"
+              onSubmitEditing={handleLogin}
             />
             <Pressable onPress={() => setShowPassword((s) => !s)}>
               <Ionicons

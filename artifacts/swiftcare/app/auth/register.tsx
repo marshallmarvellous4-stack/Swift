@@ -215,6 +215,9 @@ export default function RegisterScreen() {
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
+              autoCorrect={false}
+              autoCapitalize="none"
+              autoComplete="new-password"
             />
             <Pressable onPress={() => setShowPassword((s) => !s)}>
               <Ionicons
