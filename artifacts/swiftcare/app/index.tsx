@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import React, { useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Dimensions,
   Image,
@@ -13,49 +13,102 @@ import {
 import Animated, {
   FadeIn,
   FadeInDown,
-  FadeInUp,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const { width, height } = Dimensions.get("window");
 
+const CAROUSEL_HEIGHT = height * 0.62;
+const SLIDE_DURATION = 4000;
+const FADE_DURATION = 700;
+
+const SLIDES = [
+  require("../assets/images/splash_pharmacy.jpg"),
+  require("../assets/images/splash_stethoscope.jpg"),
+  require("../assets/images/splash_dental.jpg"),
+  require("../assets/images/splash_corridor.jpg"),
+];
+
+function CarouselSlide({
+  source,
+  visible,
+}: {
+  source: ReturnType<typeof require>;
+  visible: boolean;
+}) {
+  const opacity = useSharedValue(visible ? 1 : 0);
+
+  useEffect(() => {
+    opacity.value = withTiming(visible ? 1 : 0, { duration: FADE_DURATION });
+  }, [visible]);
+
+  const animStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+
+  return (
+    <Animated.View style={[StyleSheet.absoluteFill, animStyle]}>
+      <Image source={source} style={StyleSheet.absoluteFill} resizeMode="cover" />
+    </Animated.View>
+  );
+}
+
 export default function SplashScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const [activeIndex, setActiveIndex] = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    intervalRef.current = setInterval(() => {
+      setActiveIndex((prev) => (prev + 1) % SLIDES.length);
+    }, SLIDE_DURATION);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#16A34A" />
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      <View style={styles.bgTop} />
-      <View style={styles.bgWave} />
+      {/* ── TOP CAROUSEL SECTION ── */}
+      <View style={[styles.carouselSection, { height: CAROUSEL_HEIGHT }]}>
+        {/* stacked images with cross-fade */}
+        {SLIDES.map((src, i) => (
+          <CarouselSlide key={i} source={src} visible={i === activeIndex} />
+        ))}
 
+        {/* dark overlay */}
+        <View style={styles.overlay} />
+
+        {/* top inset spacer so status bar text stays clear */}
+        <View style={{ height: insets.top + (Platform.OS === "web" ? 44 : 0) }} />
+
+        {/* text content inside carousel */}
+        <Animated.View
+          entering={FadeIn.delay(400).duration(700)}
+          style={styles.carouselContent}
+        >
+          <Text style={styles.taglineText}>Smarter Health Starts Here.</Text>
+          <Text style={styles.subTagline}>Talk to a medical doctor</Text>
+        </Animated.View>
+
+        {/* pagination dots */}
+        <View style={styles.dotsRow}>
+          {SLIDES.map((_, i) => (
+            <View
+              key={i}
+              style={[styles.dot, i === activeIndex && styles.dotActive]}
+            />
+          ))}
+        </View>
+      </View>
+
+      {/* ── BOTTOM DARK-GREEN SECTION ── */}
       <Animated.View
-        entering={FadeInUp.delay(200).duration(800)}
-        style={[
-          styles.logoSection,
-          { paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0) + 40 },
-        ]}
-      >
-        <Image
-          source={require("../assets/images/splash.png")}
-          style={styles.logo}
-          resizeMode="contain"
-        />
-      </Animated.View>
-
-      <Animated.View
-        entering={FadeIn.delay(600).duration(600)}
-        style={styles.tagline}
-      >
-        <Text style={styles.taglineText}>Smarter Health Starts Here.</Text>
-        <Text style={styles.subTagline}>
-          Talk to a medical doctor
-        </Text>
-      </Animated.View>
-
-      <Animated.View
-        entering={FadeInDown.delay(900).duration(600)}
+        entering={FadeInDown.delay(600).duration(600)}
         style={[
           styles.bottomSection,
           {
@@ -72,7 +125,10 @@ export default function SplashScreen() {
         <Pressable
           style={({ pressed }) => [
             styles.ctaButton,
-            { opacity: pressed ? 0.88 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] },
+            {
+              opacity: pressed ? 0.88 : 1,
+              transform: [{ scale: pressed ? 0.97 : 1 }],
+            },
           ]}
           onPress={() => router.replace("/(tabs)" as never)}
         >
@@ -86,69 +142,87 @@ export default function SplashScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#16A34A",
-    alignItems: "center",
-  },
-  bgTop: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: height * 0.65,
-    backgroundColor: "#22C55E",
-    borderBottomLeftRadius: 48,
-    borderBottomRightRadius: 48,
-  },
-  bgWave: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: height * 0.45,
     backgroundColor: "#15803D",
-    borderTopLeftRadius: 80,
-    borderTopRightRadius: 80,
   },
-  logoSection: {
+
+  /* ── Carousel ── */
+  carouselSection: {
+    width: "100%",
+    overflow: "hidden",
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
+    backgroundColor: "#1a1a1a",
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.45)",
+  },
+  carouselContent: {
+    flex: 1,
     alignItems: "center",
-    zIndex: 10,
-  },
-  logo: {
-    width: width * 0.75,
-    height: height * 0.38,
-    borderRadius: 10,
-  },
-  tagline: {
-    alignItems: "center",
-    zIndex: 10,
-    marginTop: 8,
+    justifyContent: "center",
     paddingHorizontal: 32,
-    gap: 8,
+    gap: 10,
   },
   taglineText: {
-    fontSize: 20,
+    fontSize: 26,
     fontWeight: "700" as const,
     color: "#FFFFFF",
     textAlign: "center",
     fontFamily: "Inter_700Bold",
     letterSpacing: 0.3,
-  },
+    // RN native text shadow (cross-platform)
+    ...Platform.select({
+      native: {
+        textShadowColor: "rgba(0,0,0,0.4)",
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 6,
+      },
+      default: {},
+    }),
+  } as const,
   subTagline: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.8)",
+    fontSize: 15,
+    color: "rgba(255,255,255,0.85)",
     textAlign: "center",
     fontFamily: "Inter_400Regular",
-    lineHeight: 20,
-  },
-  bottomSection: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
+    lineHeight: 22,
+    ...Platform.select({
+      native: {
+        textShadowColor: "rgba(0,0,0,0.35)",
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 4,
+      },
+      default: {},
+    }),
+  } as const,
+
+  /* ── Dots ── */
+  dotsRow: {
+    flexDirection: "row",
+    justifyContent: "center",
     alignItems: "center",
+    gap: 7,
+    paddingBottom: 20,
+  },
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: "rgba(255,255,255,0.35)",
+  },
+  dotActive: {
+    backgroundColor: "#FFFFFF",
+    width: 20,
+  },
+
+  /* ── Bottom section ── */
+  bottomSection: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "flex-end",
     paddingHorizontal: 32,
     gap: 16,
-    zIndex: 10,
   },
   disclaimer: {
     fontSize: 11,
@@ -164,12 +238,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 48,
     width: "100%",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
     elevation: 6,
-  },
+    ...Platform.select({
+      native: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 12,
+      },
+      web: {
+        boxShadow: "0px 4px 12px rgba(0,0,0,0.20)",
+      },
+      default: {},
+    }),
+  } as const,
   ctaText: {
     fontSize: 17,
     fontWeight: "700" as const,
