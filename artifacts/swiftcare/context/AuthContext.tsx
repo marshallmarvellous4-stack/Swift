@@ -4,8 +4,8 @@
  * - JWT token is stored in AsyncStorage and restored on app boot.
  * - On boot, /auth/me is called to re-hydrate the user object; if the token
  *   is expired or invalid it is silently cleared.
- * - login / register return { success, error } so screens can display the
- *   exact message from the API (e.g. "An account with this email already exists").
+ * - login / register / verifyEmail / resendOtp return { success, error } so
+ *   screens can display the exact message from the API.
  */
 import React, { createContext, useContext, useEffect, useState } from "react";
 import {
@@ -51,6 +51,8 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<AuthResult>;
   register: (data: RegisterData) => Promise<AuthResult>;
   logout: () => Promise<void>;
+  verifyEmail: (otp: string) => Promise<AuthResult>;
+  resendOtp: () => Promise<AuthResult>;
 }
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -61,6 +63,11 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 interface ApiAuthResponse {
   token: string;
+  user: User;
+}
+
+interface ApiVerifyResponse {
+  message: string;
   user: User;
 }
 
@@ -85,17 +92,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(stored);
     } catch {
       // Token expired, revoked, or network error — clear it silently.
-      // The user will see the guest view and can log in again.
       await clearStoredToken();
     } finally {
       setIsLoading(false);
     }
   }
 
-  async function login(
-    email: string,
-    password: string,
-  ): Promise<AuthResult> {
+  async function login(email: string, password: string): Promise<AuthResult> {
     try {
       const { token: newToken, user: userData } =
         await apiFetch<ApiAuthResponse>("/auth/login", {
@@ -148,6 +151,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  async function verifyEmail(otp: string): Promise<AuthResult> {
+    try {
+      const { user: updatedUser } = await apiFetch<ApiVerifyResponse>(
+        "/auth/verify-email",
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({ otp }),
+        },
+      );
+      setUser(updatedUser);
+      return { success: true };
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : "Verification failed. Please try again.";
+      return { success: false, error: message };
+    }
+  }
+
+  async function resendOtp(): Promise<AuthResult> {
+    try {
+      await apiFetch("/auth/resend-otp", {
+        method: "POST",
+        token,
+      });
+      return { success: true };
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : "Could not send code. Please try again.";
+      return { success: false, error: message };
+    }
+  }
+
   async function logout(): Promise<void> {
     await clearStoredToken();
     setToken(null);
@@ -156,7 +196,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, token, isLoading, login, register, logout }}
+      value={{ user, token, isLoading, login, register, logout, verifyEmail, resendOtp }}
     >
       {children}
     </AuthContext.Provider>

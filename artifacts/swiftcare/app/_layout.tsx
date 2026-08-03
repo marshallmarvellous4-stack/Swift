@@ -6,23 +6,47 @@ import {
   useFonts,
 } from "@expo-google-fonts/inter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { AuthProvider } from "@/context/AuthContext";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
 
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
+/**
+ * Redirects authenticated-but-unverified users to the OTP screen.
+ * Exempt: auth screens (login, register, verify-email) and the splash.
+ */
+function VerificationGuard() {
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
+  const segments = useSegments();
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (!user || user.isVerified) return;
+
+    // Already on an auth screen — don't redirect in a loop
+    if (segments[0] === "auth") return;
+
+    router.replace("/auth/verify-email" as never);
+  }, [user, isLoading, segments]);
+
+  return null;
+}
+
 function RootLayoutNav() {
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" options={{ headerShown: false }} />
+    <>
+      <VerificationGuard />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen
         name="doctor/[id]"
@@ -38,6 +62,10 @@ function RootLayoutNav() {
       />
       <Stack.Screen
         name="auth/register"
+        options={{ headerShown: false, presentation: "card" }}
+      />
+      <Stack.Screen
+        name="auth/verify-email"
         options={{ headerShown: false, presentation: "card" }}
       />
       <Stack.Screen
@@ -104,7 +132,8 @@ function RootLayoutNav() {
         name="profile/coming-soon"
         options={{ headerShown: false, presentation: "card" }}
       />
-    </Stack>
+      </Stack>
+    </>
   );
 }
 

@@ -1,26 +1,38 @@
 import { Router, type IRouter } from "express";
 import bcrypt from "bcryptjs";
-import { eq } from "drizzle-orm";
-import { db, usersTable } from "@workspace/db";
+import { randomInt } from "crypto";
+import { and, desc, eq, gt, lt, sql } from "drizzle-orm";
+import { db, usersTable, emailOtpsTable } from "@workspace/db";
 import { signToken, requireAuth } from "../middlewares/auth.js";
+import { sendOtpEmail } from "../lib/email.js";
+import { logger } from "../lib/logger.js";
 
 const router: IRouter = Router();
 
-// POST /api/auth/register
+// Max failed verification attempts before an OTP is invalidated
+const MAX_OTP_ATTEMPTS = 5;
+// Minimum seconds between resend requests (server-side)
+const RESEND_COOLDOWN_SECONDS = 60;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Cryptographically secure 6-digit OTP */
+function generateOtp(): string {
+  return String(randomInt(100000, 1000000));
+}
+
+// ─── POST /api/auth/register ──────────────────────────────────────────────────
+
 router.post("/auth/register", async (req, res): Promise<void> => {
   const { fullName, email, password, sex, stateOfOrigin, mobileNumber, role } =
     req.body as Record<string, string>;
 
   if (!fullName || !email || !password) {
-    res
-      .status(400)
-      .json({ error: "fullName, email and password are required" });
+    res.status(400).json({ error: "fullName, email and password are required" });
     return;
   }
 
-  // Validate role — only user/doctor allowed via self-registration
-  const safeRole: "user" | "doctor" =
-    role === "doctor" ? "doctor" : "user";
+  const safeRole: "user" | "doctor" = role === "doctor" ? "doctor" : "user";
 
   const [existing] = await db
     .select({ id: usersTable.id })
@@ -47,6 +59,34 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     })
     .returning();
 
+  // Create OTP inside a transaction with an advisory lock so that even if
+  // registration is called twice in a race the user has exactly one active OTP.
+  try {
+    await db.transaction(async (tx) => {
+      // Advisory lock keyed by userId serializes concurrent OTP operations
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(${user.id})`);
+
+      await tx
+        .update(emailOtpsTable)
+        .set({ used: true })
+        .where(and(eq(emailOtpsTable.userId, user.id), eq(emailOtpsTable.used, false)));
+
+      const otp = generateOtp();
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+      await tx.insert(emailOtpsTable).values({ userId: user.id, otp, expiresAt });
+
+      // Send email after insert so rollback is possible if email throws
+      await sendOtpEmail({ to: user.email, otp, fullName: user.fullName });
+    });
+  } catch (err) {
+    logger.error({ err }, "Failed to create/send OTP — rolling back user");
+    await db.delete(usersTable).where(eq(usersTable.id, user.id));
+    res.status(500).json({
+      error: "Account created but we could not send a verification code. Please try registering again.",
+    });
+    return;
+  }
+
   const token = signToken({ userId: user.id, email: user.email, role: user.role });
 
   res.status(201).json({
@@ -64,7 +104,8 @@ router.post("/auth/register", async (req, res): Promise<void> => {
   });
 });
 
-// POST /api/auth/login
+// ─── POST /api/auth/login ─────────────────────────────────────────────────────
+
 router.post("/auth/login", async (req, res): Promise<void> => {
   const { email, password } = req.body as Record<string, string>;
 
@@ -106,7 +147,8 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   });
 });
 
-// GET /api/auth/me  — returns current user from token
+// ─── GET /api/auth/me ─────────────────────────────────────────────────────────
+
 router.get("/auth/me", requireAuth, async (req, res): Promise<void> => {
   const [user] = await db
     .select()
@@ -129,6 +171,206 @@ router.get("/auth/me", requireAuth, async (req, res): Promise<void> => {
     isVerified: user.isVerified,
     createdAt: user.createdAt,
   });
+});
+
+// ─── POST /api/auth/verify-email ──────────────────────────────────────────────
+
+router.post("/auth/verify-email", requireAuth, async (req, res): Promise<void> => {
+  const { otp } = req.body as { otp?: string };
+
+  if (!otp || otp.length !== 6 || !/^\d{6}$/.test(otp)) {
+    res.status(400).json({ error: "A 6-digit verification code is required" });
+    return;
+  }
+
+  const userId = req.user!.userId;
+
+  const [currentUser] = await db
+    .select({ isVerified: usersTable.isVerified })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId));
+
+  if (currentUser?.isVerified) {
+    res.json({ message: "Email is already verified" });
+    return;
+  }
+
+  const now = new Date();
+
+  // Select the single newest active OTP for this user. Pinning to a specific
+  // ID ensures that even if concurrent resends created stale rows, we always
+  // evaluate the user's most recent code — and our atomic UPDATE targets only
+  // that row, giving a firm 5-attempt ceiling regardless of concurrency.
+  const [latestRef] = await db
+    .select({ id: emailOtpsTable.id, storedOtp: emailOtpsTable.otp })
+    .from(emailOtpsTable)
+    .where(
+      and(
+        eq(emailOtpsTable.userId, userId),
+        eq(emailOtpsTable.used, false),
+        gt(emailOtpsTable.expiresAt, now),
+      ),
+    )
+    .orderBy(desc(emailOtpsTable.createdAt))
+    .limit(1);
+
+  if (!latestRef) {
+    res.status(400).json({ error: "Verification code has expired. Please request a new one." });
+    return;
+  }
+
+  // Atomically increment the attempt counter on the specific OTP row.
+  // PostgreSQL serializes concurrent UPDATEs on the same row: the second
+  // request will see the row already at the incremented count, so the
+  // `attempts < MAX` predicate enforces the cap correctly even under load.
+  const [updated] = await db
+    .update(emailOtpsTable)
+    .set({ attempts: sql`${emailOtpsTable.attempts} + 1` })
+    .where(
+      and(
+        eq(emailOtpsTable.id, latestRef.id),
+        lt(emailOtpsTable.attempts, MAX_OTP_ATTEMPTS),
+      ),
+    )
+    .returning();
+
+  if (!updated) {
+    // Attempt cap already reached (concurrent requests filled it)
+    res.status(429).json({
+      error: "Too many incorrect attempts. Please request a new verification code.",
+    });
+    return;
+  }
+
+  // Wrong code
+  if (latestRef.storedOtp !== otp) {
+    const remaining = MAX_OTP_ATTEMPTS - updated.attempts;
+    if (remaining <= 0) {
+      await db
+        .update(emailOtpsTable)
+        .set({ used: true })
+        .where(eq(emailOtpsTable.id, updated.id));
+      res.status(429).json({
+        error: "Too many incorrect attempts. Please request a new verification code.",
+      });
+    } else {
+      res.status(400).json({
+        error: `Incorrect verification code. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.`,
+      });
+    }
+    return;
+  }
+
+  // Correct OTP — mark used and set user as verified atomically
+  await db.transaction(async (tx) => {
+    await tx
+      .update(emailOtpsTable)
+      .set({ used: true })
+      .where(eq(emailOtpsTable.id, updated.id));
+
+    await tx
+      .update(usersTable)
+      .set({ isVerified: true })
+      .where(eq(usersTable.id, userId));
+  });
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+
+  res.json({
+    message: "Email verified successfully",
+    user: {
+      id: user.id,
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role,
+      sex: user.sex,
+      stateOfOrigin: user.stateOfOrigin,
+      mobileNumber: user.mobileNumber,
+      isVerified: user.isVerified,
+    },
+  });
+});
+
+// ─── POST /api/auth/resend-otp ────────────────────────────────────────────────
+
+router.post("/auth/resend-otp", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.user!.userId;
+
+  // Run the cooldown check, invalidation, and new OTP creation inside a
+  // transaction guarded by a PostgreSQL advisory lock keyed on the userId.
+  // This serializes concurrent resend requests for the same user, preventing
+  // two calls from both passing the cooldown check and creating duplicate OTPs.
+  let waitSeconds = 0;
+  let alreadyVerified = false;
+  let sendError = false;
+
+  try {
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(${userId})`);
+
+      const [user] = await tx
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.id, userId));
+
+      if (!user) throw Object.assign(new Error("not_found"), { code: "not_found" });
+      if (user.isVerified) { alreadyVerified = true; return; }
+
+      // Cooldown: any OTP (used or unused) created within the window blocks resend
+      const cutoff = new Date(Date.now() - RESEND_COOLDOWN_SECONDS * 1000);
+      const [recent] = await tx
+        .select({ createdAt: emailOtpsTable.createdAt })
+        .from(emailOtpsTable)
+        .where(and(eq(emailOtpsTable.userId, userId), gt(emailOtpsTable.createdAt, cutoff)))
+        .orderBy(desc(emailOtpsTable.createdAt))
+        .limit(1);
+
+      if (recent) {
+        waitSeconds = Math.ceil(RESEND_COOLDOWN_SECONDS - (Date.now() - recent.createdAt.getTime()) / 1000);
+        return;
+      }
+
+      // Invalidate all previous active OTPs, then create exactly one new one
+      await tx
+        .update(emailOtpsTable)
+        .set({ used: true })
+        .where(and(eq(emailOtpsTable.userId, userId), eq(emailOtpsTable.used, false)));
+
+      const otp = generateOtp();
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+      await tx.insert(emailOtpsTable).values({ userId, otp, expiresAt });
+
+      try {
+        await sendOtpEmail({ to: user.email, otp, fullName: user.fullName });
+      } catch (err) {
+        logger.error({ err }, "Failed to send OTP email on resend");
+        sendError = true;
+        throw err; // roll back the insert
+      }
+    });
+  } catch (err: unknown) {
+    if ((err as { code?: string }).code === "not_found") {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+    if (!sendError) throw err;
+    res.status(500).json({ error: "Failed to send verification email. Please try again." });
+    return;
+  }
+
+  if (alreadyVerified) {
+    res.status(400).json({ error: "Email is already verified" });
+    return;
+  }
+
+  if (waitSeconds > 0) {
+    res.status(429).json({
+      error: `Please wait ${waitSeconds} second${waitSeconds === 1 ? "" : "s"} before requesting a new code.`,
+    });
+    return;
+  }
+
+  res.json({ message: "Verification code sent" });
 });
 
 export default router;

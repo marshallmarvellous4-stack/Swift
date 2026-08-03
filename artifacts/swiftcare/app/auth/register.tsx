@@ -1,10 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 import {
-  Animated,
-  Modal,
   Platform,
   Pressable,
   StyleSheet,
@@ -23,128 +21,6 @@ const ROLE_OPTIONS: { value: "user" | "doctor"; label: string }[] = [
   { value: "user", label: "Patient" },
   { value: "doctor", label: "Doctor" },
 ];
-
-// ─── Success modal ────────────────────────────────────────────────────────────
-
-function SuccessModal({
-  visible,
-  userName,
-  onContinue,
-}: {
-  visible: boolean;
-  userName: string;
-  onContinue: () => void;
-}) {
-  const colors = useColors();
-  const insets = useSafeAreaInsets();
-  const scale = useRef(new Animated.Value(0.7)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
-  const checkScale = useRef(new Animated.Value(0)).current;
-
-  React.useEffect(() => {
-    if (visible) {
-      // Card pop-in
-      Animated.parallel([
-        Animated.spring(scale, {
-          toValue: 1,
-          friction: 6,
-          tension: 80,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: 220,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        // Check-mark springs in after card appears
-        Animated.spring(checkScale, {
-          toValue: 1,
-          friction: 4,
-          tension: 120,
-          useNativeDriver: true,
-        }).start();
-      });
-    } else {
-      scale.setValue(0.7);
-      opacity.setValue(0);
-      checkScale.setValue(0);
-    }
-  }, [visible]);
-
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="none"
-      statusBarTranslucent
-    >
-      <View style={styles.modalBackdrop}>
-        <Animated.View
-          style={[
-            styles.modalCard,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-              paddingBottom: insets.bottom + 24,
-              transform: [{ scale }],
-              opacity,
-            },
-          ]}
-        >
-          {/* Circle icon */}
-          <View style={[styles.iconCircle, { backgroundColor: colors.primary + "18" }]}>
-            <Animated.View style={{ transform: [{ scale: checkScale }] }}>
-              <View style={[styles.iconInner, { backgroundColor: colors.primary }]}>
-                <Ionicons name="checkmark" size={36} color="#fff" />
-              </View>
-            </Animated.View>
-          </View>
-
-          <Text style={[styles.successTitle, { color: colors.foreground }]}>
-            Account Created!
-          </Text>
-          <Text style={[styles.successSub, { color: colors.mutedForeground }]}>
-            Welcome to SwiftCare, {userName.split(" ")[0]}.{"\n"}
-            Your account is ready and you're all set.
-          </Text>
-
-          {/* Divider */}
-          <View style={[styles.successDivider, { backgroundColor: colors.border }]} />
-
-          {/* Trust indicators */}
-          <View style={styles.trustRow}>
-            {[
-              { icon: "shield-checkmark-outline" as const, text: "Secure login" },
-              { icon: "lock-closed-outline" as const, text: "Password encrypted" },
-              { icon: "person-circle-outline" as const, text: "Profile ready" },
-            ].map(({ icon, text }) => (
-              <View key={text} style={styles.trustItem}>
-                <Ionicons name={icon} size={18} color={colors.primary} />
-                <Text style={[styles.trustText, { color: colors.mutedForeground }]}>{text}</Text>
-              </View>
-            ))}
-          </View>
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.continueBtn,
-              {
-                backgroundColor: colors.primary,
-                opacity: pressed ? 0.88 : 1,
-                transform: [{ scale: pressed ? 0.98 : 1 }],
-              },
-            ]}
-            onPress={onContinue}
-          >
-            <Text style={styles.continueBtnText}>Go to Dashboard</Text>
-            <Ionicons name="arrow-forward" size={18} color="#fff" />
-          </Pressable>
-        </Animated.View>
-      </View>
-    </Modal>
-  );
-}
 
 // ─── Register screen ──────────────────────────────────────────────────────────
 
@@ -165,8 +41,6 @@ export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showSuccess, setShowSuccess] = useState(false);
-
   async function handleRegister() {
     setError(null);
 
@@ -201,7 +75,7 @@ export default function RegisterScreen() {
       });
       if (result.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        setShowSuccess(true);
+        router.replace("/auth/verify-email" as never);
       } else {
         setError(result.error ?? "Could not create account. Please try again.");
       }
@@ -409,14 +283,6 @@ export default function RegisterScreen() {
         </View>
       </KeyboardAwareScrollViewCompat>
 
-      <SuccessModal
-        visible={showSuccess}
-        userName={fullName}
-        onContinue={() => {
-          setShowSuccess(false);
-          router.replace("/(tabs)" as never);
-        }}
-      />
     </>
   );
 }
@@ -502,43 +368,4 @@ const styles = StyleSheet.create({
   loginText: { fontSize: 14, fontFamily: "Inter_400Regular" },
   loginLink: { fontSize: 14, fontWeight: "600" as const, fontFamily: "Inter_600SemiBold" },
 
-  // ── Success modal
-  modalBackdrop: {
-    flex: 1, backgroundColor: "rgba(0,0,0,0.55)",
-    justifyContent: "center", alignItems: "center", paddingHorizontal: 24,
-  },
-  modalCard: {
-    width: "100%", borderRadius: 24, borderWidth: 1,
-    paddingTop: 36, paddingHorizontal: 28,
-    alignItems: "center", gap: 0,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.18, shadowRadius: 40, elevation: 20,
-  },
-  iconCircle: {
-    width: 96, height: 96, borderRadius: 48,
-    alignItems: "center", justifyContent: "center", marginBottom: 20,
-  },
-  iconInner: {
-    width: 68, height: 68, borderRadius: 34,
-    alignItems: "center", justifyContent: "center",
-  },
-  successTitle: {
-    fontSize: 24, fontWeight: "700" as const, fontFamily: "Inter_700Bold",
-    marginBottom: 10, textAlign: "center",
-  },
-  successSub: {
-    fontSize: 15, fontFamily: "Inter_400Regular", textAlign: "center",
-    lineHeight: 22, marginBottom: 24,
-  },
-  successDivider: { width: "100%", height: 1, marginBottom: 20 },
-  trustRow: { flexDirection: "row", justifyContent: "space-around", width: "100%", marginBottom: 28 },
-  trustItem: { alignItems: "center", gap: 6 },
-  trustText: { fontSize: 11, fontFamily: "Inter_500Medium", textAlign: "center" },
-  continueBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 8, width: "100%", paddingVertical: 16, borderRadius: 50, marginBottom: 4,
-  },
-  continueBtnText: {
-    fontSize: 16, fontWeight: "700" as const, fontFamily: "Inter_700Bold", color: "#fff",
-  },
 });
