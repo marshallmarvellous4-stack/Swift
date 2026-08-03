@@ -5,34 +5,53 @@
  *   EXPO_PUBLIC_DOMAIN=$REPLIT_DEV_DOMAIN
  * in the Expo dev workflow, pointing to the shared /api path served by
  * the api-server artifact.
+ *
+ * Token storage uses expo-secure-store (OS keychain / Android Keystore) on
+ * native for maximum security, with an AsyncStorage fallback on web where
+ * SecureStore is unavailable.
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
+import { Platform } from "react-native";
 
 // ─── Base URL ─────────────────────────────────────────────────────────────────
 
 const domain = process.env.EXPO_PUBLIC_DOMAIN;
 export const API_BASE = domain
   ? `https://${domain}/api`
-  : "http://localhost:8080/api";   // fallback for local CLI usage
+  : "http://localhost:8080/api"; // fallback for local CLI usage
 
-// ─── Token storage (AsyncStorage) ────────────────────────────────────────────
+// ─── Token storage ────────────────────────────────────────────────────────────
+// On iOS / Android: expo-secure-store (hardware-backed keychain / keystore)
+// On web: AsyncStorage (SecureStore is not available in browsers)
 
 const TOKEN_KEY = "swiftcare_jwt";
 
 export async function getStoredToken(): Promise<string | null> {
   try {
-    return await AsyncStorage.getItem(TOKEN_KEY);
+    if (Platform.OS === "web") {
+      return await AsyncStorage.getItem(TOKEN_KEY);
+    }
+    return await SecureStore.getItemAsync(TOKEN_KEY);
   } catch {
     return null;
   }
 }
 
 export async function storeToken(token: string): Promise<void> {
-  await AsyncStorage.setItem(TOKEN_KEY, token);
+  if (Platform.OS === "web") {
+    await AsyncStorage.setItem(TOKEN_KEY, token);
+  } else {
+    await SecureStore.setItemAsync(TOKEN_KEY, token);
+  }
 }
 
 export async function clearStoredToken(): Promise<void> {
-  await AsyncStorage.removeItem(TOKEN_KEY);
+  if (Platform.OS === "web") {
+    await AsyncStorage.removeItem(TOKEN_KEY);
+  } else {
+    await SecureStore.deleteItemAsync(TOKEN_KEY);
+  }
 }
 
 // ─── Typed fetch wrapper ──────────────────────────────────────────────────────
