@@ -3,7 +3,13 @@ import bcrypt from "bcryptjs";
 import { randomInt } from "crypto";
 import { and, desc, eq, gt, lt, sql } from "drizzle-orm";
 import { db, usersTable, emailOtpsTable } from "@workspace/db";
-import { signToken, requireAuth } from "../middlewares/auth.js";
+import {
+  signToken,
+  requireAuth,
+  createRefreshToken,
+  rotateRefreshToken,
+  revokeRefreshToken,
+} from "../middlewares/auth.js";
 import { sendOtpEmail } from "../lib/email.js";
 import { logger } from "../lib/logger.js";
 
@@ -88,9 +94,11 @@ router.post("/auth/register", async (req, res): Promise<void> => {
   }
 
   const token = signToken({ userId: user.id, email: user.email, role: user.role });
+  const refreshToken = await createRefreshToken(user.id);
 
   res.status(201).json({
     token,
+    refreshToken,
     user: {
       id: user.id,
       fullName: user.fullName,
@@ -131,9 +139,11 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   }
 
   const token = signToken({ userId: user.id, email: user.email, role: user.role });
+  const refreshToken = await createRefreshToken(user.id);
 
   res.json({
     token,
+    refreshToken,
     user: {
       id: user.id,
       fullName: user.fullName,
@@ -145,6 +155,53 @@ router.post("/auth/login", async (req, res): Promise<void> => {
       isVerified: user.isVerified,
     },
   });
+});
+
+// ─── POST /api/auth/refresh ───────────────────────────────────────────────────
+
+router.post("/auth/refresh", async (req, res): Promise<void> => {
+  const { refreshToken } = req.body as { refreshToken?: string };
+
+  if (!refreshToken || typeof refreshToken !== "string") {
+    res.status(400).json({ error: "refreshToken is required" });
+    return;
+  }
+
+  const result = await rotateRefreshToken(refreshToken);
+
+  if (!result) {
+    res.status(401).json({ error: "Invalid or expired refresh token" });
+    return;
+  }
+
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, result.userId));
+
+  if (!user) {
+    res.status(401).json({ error: "User not found" });
+    return;
+  }
+
+  const newToken = signToken({ userId: user.id, email: user.email, role: user.role });
+
+  res.json({
+    token: newToken,
+    refreshToken: result.newRefreshToken,
+  });
+});
+
+// ─── POST /api/auth/logout ────────────────────────────────────────────────────
+
+router.post("/auth/logout", async (req, res): Promise<void> => {
+  const { refreshToken } = req.body as { refreshToken?: string };
+
+  if (refreshToken && typeof refreshToken === "string") {
+    await revokeRefreshToken(refreshToken);
+  }
+
+  res.json({ message: "Logged out" });
 });
 
 // ─── GET /api/auth/me ─────────────────────────────────────────────────────────

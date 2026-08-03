@@ -1,7 +1,8 @@
 import { type NextFunction, type Request, type Response } from "express";
 import jwt from "jsonwebtoken";
-import { eq } from "drizzle-orm";
-import { db, usersTable } from "@workspace/db";
+import { createHash, randomBytes } from "crypto";
+import { and, eq, gt, isNull } from "drizzle-orm";
+import { db, usersTable, refreshTokensTable } from "@workspace/db";
 
 export interface JwtPayload {
   userId: number;
@@ -24,9 +25,97 @@ function getJwtSecret(): string {
   return secret;
 }
 
+/** Short-lived access token (15 minutes) */
 export function signToken(payload: JwtPayload): string {
-  return jwt.sign(payload, getJwtSecret(), { expiresIn: "7d" });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: "15m" });
 }
+
+// ─── Refresh token helpers ────────────────────────────────────────────────────
+
+const REFRESH_TOKEN_BYTES = 48; // 384 bits of entropy → 96-char hex string
+const REFRESH_TOKEN_TTL_DAYS = 30;
+
+function hashToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+/**
+ * Generate a cryptographically secure refresh token, persist its hash to the
+ * DB, and return the plain-text value to hand back to the client.
+ */
+export async function createRefreshToken(userId: number): Promise<string> {
+  const plain = randomBytes(REFRESH_TOKEN_BYTES).toString("hex");
+  const tokenHash = hashToken(plain);
+  const expiresAt = new Date(
+    Date.now() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000,
+  );
+  await db.insert(refreshTokensTable).values({ userId, tokenHash, expiresAt });
+  return plain;
+}
+
+/**
+ * Verify a refresh token and rotate it: revoke the presented token and issue
+ * a fresh one.  Returns the new plain-text refresh token and the userId on
+ * success, or null when the token is invalid/expired/revoked.
+ */
+export async function rotateRefreshToken(
+  plain: string,
+): Promise<{ userId: number; newRefreshToken: string } | null> {
+  const tokenHash = hashToken(plain);
+  const now = new Date();
+
+  const [row] = await db
+    .select()
+    .from(refreshTokensTable)
+    .where(
+      and(
+        eq(refreshTokensTable.tokenHash, tokenHash),
+        gt(refreshTokensTable.expiresAt, now),
+        isNull(refreshTokensTable.revokedAt),
+      ),
+    );
+
+  if (!row) return null;
+
+  // Revoke the old token and issue a new one atomically
+  const newPlain = randomBytes(REFRESH_TOKEN_BYTES).toString("hex");
+  const newHash = hashToken(newPlain);
+  const expiresAt = new Date(
+    Date.now() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000,
+  );
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(refreshTokensTable)
+      .set({ revokedAt: now })
+      .where(eq(refreshTokensTable.id, row.id));
+
+    await tx
+      .insert(refreshTokensTable)
+      .values({ userId: row.userId, tokenHash: newHash, expiresAt });
+  });
+
+  return { userId: row.userId, newRefreshToken: newPlain };
+}
+
+/**
+ * Revoke a specific refresh token (called on logout).
+ * No-ops silently if the token is not found or already revoked.
+ */
+export async function revokeRefreshToken(plain: string): Promise<void> {
+  const tokenHash = hashToken(plain);
+  await db
+    .update(refreshTokensTable)
+    .set({ revokedAt: new Date() })
+    .where(
+      and(
+        eq(refreshTokensTable.tokenHash, tokenHash),
+        isNull(refreshTokensTable.revokedAt),
+      ),
+    );
+}
+
+// ─── Express middlewares ──────────────────────────────────────────────────────
 
 /** Require a valid JWT. Attaches req.user on success. */
 export function requireAuth(

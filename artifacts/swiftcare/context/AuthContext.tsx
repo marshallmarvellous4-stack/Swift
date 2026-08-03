@@ -1,18 +1,24 @@
 /**
- * AuthContext — real API-backed authentication.
+ * AuthContext — real API-backed authentication with refresh token support.
  *
- * - JWT token is stored in AsyncStorage and restored on app boot.
- * - On boot, /auth/me is called to re-hydrate the user object; if the token
- *   is expired or invalid it is silently cleared.
- * - login / register / verifyEmail / resendOtp return { success, error } so
- *   screens can display the exact message from the API.
+ * - Short-lived access JWT (15 min) is stored in secure storage.
+ * - Long-lived refresh token (30 days) is stored in secure storage alongside it.
+ * - On boot, /auth/me is called to re-hydrate the user object; if the access
+ *   token is expired the client attempts a silent refresh before giving up.
+ * - apiFetch automatically handles 401 → refresh → retry for every request.
+ * - Logout calls POST /auth/logout to revoke the refresh token server-side,
+ *   then clears all local state.
  */
 import React, { createContext, useContext, useEffect, useState } from "react";
 import {
   ApiError,
   apiFetch,
-  clearStoredToken,
+  attemptTokenRefresh,
+  clearAllTokens,
+  clearStoredRefreshToken,
+  getStoredRefreshToken,
   getStoredToken,
+  storeRefreshToken,
   storeToken,
 } from "@/utils/api";
 
@@ -63,6 +69,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 interface ApiAuthResponse {
   token: string;
+  refreshToken: string;
   user: User;
 }
 
@@ -76,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Restore session from stored token on every app launch
+  // Restore session from stored tokens on every app launch
   useEffect(() => {
     void restoreSession();
   }, []);
@@ -84,23 +91,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function restoreSession(): Promise<void> {
     try {
       const stored = await getStoredToken();
-      if (!stored) return;
 
-      // Verify the token is still valid by calling /auth/me
-      const userData = await apiFetch<User>("/auth/me", { token: stored });
+      if (stored) {
+        // Try with the existing access token first (happy path)
+        try {
+          const userData = await apiFetch<User>("/auth/me", {
+            token: stored,
+            skipRefresh: true, // we handle refresh ourselves below
+          });
+          setUser(userData);
+          setToken(stored);
+          return;
+        } catch (err) {
+          if (!(err instanceof ApiError) || err.status !== 401) throw err;
+          // Access token expired — fall through to refresh
+        }
+      }
+
+      // Attempt a silent refresh using the stored refresh token
+      const newToken = await attemptTokenRefresh();
+      if (!newToken) return; // no refresh token or it's expired — stay logged out
+
+      const userData = await apiFetch<User>("/auth/me", {
+        token: newToken,
+        skipRefresh: true,
+      });
       setUser(userData);
-      setToken(stored);
+      setToken(newToken);
     } catch {
-      // Token expired, revoked, or network error — clear it silently.
-      await clearStoredToken();
+      // Unrecoverable — clear everything and stay logged out
+      await clearAllTokens();
     } finally {
       setIsLoading(false);
     }
   }
 
+  /** Force sign-out when a token refresh fails mid-session */
+  function handleSessionExpired(): void {
+    void (async () => {
+      await clearAllTokens();
+      setToken(null);
+      setUser(null);
+    })();
+  }
+
   async function login(email: string, password: string): Promise<AuthResult> {
     try {
-      const { token: newToken, user: userData } =
+      const { token: newToken, refreshToken, user: userData } =
         await apiFetch<ApiAuthResponse>("/auth/login", {
           method: "POST",
           body: JSON.stringify({
@@ -110,6 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
 
       await storeToken(newToken);
+      await storeRefreshToken(refreshToken);
       setToken(newToken);
       setUser(userData);
       return { success: true };
@@ -124,7 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function register(data: RegisterData): Promise<AuthResult> {
     try {
-      const { token: newToken, user: userData } =
+      const { token: newToken, refreshToken, user: userData } =
         await apiFetch<ApiAuthResponse>("/auth/register", {
           method: "POST",
           body: JSON.stringify({
@@ -139,6 +177,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
 
       await storeToken(newToken);
+      await storeRefreshToken(refreshToken);
       setToken(newToken);
       setUser(userData);
       return { success: true };
@@ -159,6 +198,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           method: "POST",
           token,
           body: JSON.stringify({ otp }),
+          onSessionExpired: handleSessionExpired,
         },
       );
       setUser(updatedUser);
@@ -177,6 +217,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await apiFetch("/auth/resend-otp", {
         method: "POST",
         token,
+        onSessionExpired: handleSessionExpired,
       });
       return { success: true };
     } catch (err) {
@@ -189,7 +230,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function logout(): Promise<void> {
-    await clearStoredToken();
+    // Revoke the refresh token server-side so it cannot be reused
+    const storedRefresh = await getStoredRefreshToken();
+    if (storedRefresh) {
+      try {
+        await apiFetch("/auth/logout", {
+          method: "POST",
+          body: JSON.stringify({ refreshToken: storedRefresh }),
+          skipRefresh: true, // no point refreshing during logout
+        });
+      } catch {
+        // Best-effort — local state is cleared regardless
+      }
+      await clearStoredRefreshToken();
+    }
+
+    await clearAllTokens();
     setToken(null);
     setUser(null);
   }

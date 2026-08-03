@@ -1,1 +1,2 @@
 - [API auth connection](api-auth-connection.md) — mobile app talks to API via EXPO_PUBLIC_DOMAIN; token in AsyncStorage; session restored on boot via /auth/me
+- [Refresh token design](refresh-token-design.md) — 15-min access tokens + 30-day refresh tokens; single-use rotation; hash stored in DB; auto-retry on 401 in apiFetch
