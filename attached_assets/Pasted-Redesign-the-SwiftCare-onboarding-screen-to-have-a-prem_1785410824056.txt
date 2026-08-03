@@ -1,0 +1,67 @@
+Redesign the SwiftCare onboarding screen to have a premium, modern healthcare app appearance while preserving the existing brand colors and identity.
+Layout
+The screen should be divided into two sections:
+Top Section (65%): Auto-playing image carousel.
+Bottom Section (35%): Solid SwiftCare green panel.
+Top Section
+Display a full-width image carousel.
+With the healthcare images i supplied already
+
+Auto-slide every 4 seconds.
+Enable swipe gestures.
+Apply a 45% black gradient overlay on each image for better text readability.
+Keep the images using resizeMode="cover".
+Image Position (Very Important)
+Move the carousel image slightly downward so there is comfortable breathing space below the notch/status bar.
+Do not place important content close to the top of the screen.
+The logo and text should sit around the middle 60% of the image area for a more premium, balanced appearance.
+Branding
+Center everything horizontally.
+Display:
+SwiftCare Logo
+Below it:
+Smarter Health Starts Here.
+(Font Size: 34, Bold, White)
+Below that:
+Talk to a medical doctor
+(Font Size: 18, White with 90% opacity)
+Carousel Indicators
+Place pagination dots just above the green section.
+Active dot:
+White
+Width: 22px
+Rounded
+Inactive dots:
+White at 45% opacity
+Circular
+Animate smoothly as slides change.
+Bottom Section
+Keep the existing SwiftCare green (#16A34A).
+Add a smooth curved transition between the image carousel and the green panel.
+Keep:
+SwiftCare does not replace professional medical advice.
+ For emergencies, visit the nearest hospital immediately.
+Centered with small white text.
+Get Started Button
+Keep the button exactly as it is but make it feel premium.
+White background
+Green text (#16A34A)
+Height: 56px
+Border Radius: 30px
+Width: 85%
+Soft shadow
+Positioned near the bottom with proper safe-area spacing
+Animation
+Fade transition between slides
+Duration: 700ms
+Auto-play every 4 seconds
+Infinite loop
+Technical Requirements
+React Native Expo
+Use react-native-reanimated-carousel
+Use expo-linear-gradient for the dark overlay
+Respect SafeAreaView on all devices
+Optimize images for performance and smooth animations
+Overall Design Goal
+The onboarding screen should feel similar in quality to apps like Apple Health, Ada Health, Headspace, and Calm—clean, premium, trustworthy, spacious, and welcoming. The hero images should be the focal point, with the SwiftCare branding floating elegantly over them and enough breathing room around the content to avoid feeling cramped.
+

@@ -1,0 +1,64 @@
+.sc-onboarding-root {
+  --sc-green: #16a34a;
+  --sc-green-dark: #0e7a37;
+  font-family: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+}
+
+.sc-onboarding-root * {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@keyframes sc-fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sc-logo-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.sc-anim-logo {
+  animation: sc-logo-pop 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.sc-anim-headline {
+  animation: sc-fade-in-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
+}
+
+.sc-anim-sub {
+  animation: sc-fade-in-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both;
+}
+
+.sc-anim-bottom {
+  animation: sc-fade-in-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.45s both;
+}
+
+.sc-get-started-btn {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sc-get-started-btn:active {
+  transform: scale(0.97);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+}
+
+.sc-dot {
+  transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.35s ease;
+}
+
+.sc-slide {
+  transition: opacity 0.7s ease-in-out;
+}
