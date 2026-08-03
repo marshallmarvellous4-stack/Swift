@@ -112,11 +112,11 @@ export function DoctorCard({ doctor }: DoctorCardProps) {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16, borderWidth: 1, marginBottom: 12, overflow: "hidden",
+    borderRadius: 16, borderWidth: 1, marginBottom: 14, overflow: "hidden",
     shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
   },
-  topRow: { flexDirection: "row", padding: 14, gap: 12, alignItems: "flex-start" },
+  topRow: { flexDirection: "row", paddingHorizontal: 14, paddingVertical: 16, gap: 12, alignItems: "flex-start" },
   avatarWrap: { position: "relative" },
   avatar: { width: 68, height: 68, borderRadius: 34, borderWidth: 2 },
   statusDot: { position: "absolute", bottom: 2, right: 2, width: 13, height: 13, borderRadius: 7, borderWidth: 2, borderColor: "#fff" },
@@ -134,15 +134,18 @@ const styles = StyleSheet.create({
   statusLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
   ratingText: { fontSize: 12, fontFamily: "Inter_700Bold", fontWeight: "700" as const },
   reviewsText: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  langRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingBottom: 12 },
+  langRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingBottom: 14 },
   langChips: { flexDirection: "row", gap: 5, flexWrap: "wrap" },
   langChip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
   langText: { fontSize: 10, fontFamily: "Inter_500Medium" },
   footer: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-    paddingHorizontal: 14, paddingVertical: 11, borderTopWidth: 1,
+    paddingHorizontal: 14, paddingVertical: 14, borderTopWidth: 1,
   },
-  feeLabel: { fontSize: 10, fontFamily: "Inter_400Regular", marginBottom: 1 },
+  feeLabel: {
+    fontSize: 9, fontFamily: "Inter_400Regular", marginBottom: 2,
+    textTransform: "uppercase" as const, letterSpacing: 0.7,
+  },
   feeValue: { fontSize: 15, fontFamily: "Inter_700Bold", fontWeight: "700" as const },
   bookBtn: {
     flexDirection: "row", alignItems: "center", gap: 5,
