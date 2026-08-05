@@ -94,7 +94,7 @@ export function Onboarding() {
             <img
               src="/__mockup/images/swiftcare_logo.png"
               alt="SwiftCare"
-              className="sc-anim-logo w-48 h-auto object-contain mx-auto"
+              className="sc-anim-logo w-48 h-auto object-contain mx-auto rounded-tl-[1px] rounded-tr-[1px] rounded-br-[1px] rounded-bl-[1px] border-t-[1px] border-r-[1px] border-b-[1px] border-l-[1px] opacity-[1] pl-[1px] pr-[1px] pt-[10px] pb-[10px] mt-[0px] mb-[0px] ml-[82.2656px] mr-[82.2656px]"
             />
             <h1
               className="sc-anim-headline text-center text-white font-bold mt-6"
@@ -142,7 +142,6 @@ export function Onboarding() {
           ))}
         </div>
       </div>
-
       {/* ---------- Curved divider + bottom green section (35%) ---------- */}
       <div
         className="absolute left-0 right-0 bottom-0"
