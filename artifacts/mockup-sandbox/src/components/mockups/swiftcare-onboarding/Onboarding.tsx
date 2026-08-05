@@ -94,7 +94,7 @@ export function Onboarding() {
             <img
               src="/__mockup/images/swiftcare_logo.png"
               alt="SwiftCare"
-              className="sc-anim-logo w-48 h-auto object-contain mx-auto rounded-tl-[1px] rounded-tr-[1px] rounded-br-[1px] rounded-bl-[1px] border-t-[1px] border-r-[1px] border-b-[1px] border-l-[1px] opacity-[1] pl-[1px] pr-[1px] pt-[10px] pb-[10px] mt-[0px] mb-[0px] ml-[82.2656px] mr-[82.2656px]"
+              className="sc-anim-logo w-48 h-auto object-contain mx-auto opacity-[1] pl-[1px] pr-[1px] pt-[10px] pb-[10px] mt-[0px] mb-[0px] ml-[82.2656px] mr-[82.2656px] border-t-[0px] border-r-[0px] border-b-[0px] border-l-[0px] rounded-tl-[0px] rounded-tr-[0px] rounded-br-[0px] rounded-bl-[0px]"
             />
             <h1
               className="sc-anim-headline text-center text-white font-bold mt-6"
