@@ -10,7 +10,7 @@ import {
   rotateRefreshToken,
   revokeRefreshToken,
 } from "../middlewares/auth.js";
-import { sendOtpEmail } from "../lib/email.js";
+import { sendOtpEmail, sendPasswordResetEmail } from "../lib/email.js";
 import { logger } from "../lib/logger.js";
 
 const router: IRouter = Router();
@@ -428,6 +428,192 @@ router.post("/auth/resend-otp", requireAuth, async (req, res): Promise<void> => 
   }
 
   res.json({ message: "Verification code sent" });
+});
+
+// ─── POST /api/auth/forgot-password ──────────────────────────────────────────
+
+router.post("/auth/forgot-password", async (req, res): Promise<void> => {
+  const { email } = req.body as { email?: string };
+
+  if (!email || typeof email !== "string") {
+    res.status(400).json({ error: "email is required" });
+    return;
+  }
+
+  // Always respond with 200 to prevent email enumeration
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.email, email.toLowerCase().trim()));
+
+  if (!user) {
+    res.json({ message: "If an account exists for that email, a reset code has been sent." });
+    return;
+  }
+
+  try {
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(${user.id})`);
+
+      // Cooldown: block rapid repeat requests (same window as resend-otp)
+      const cutoff = new Date(Date.now() - RESEND_COOLDOWN_SECONDS * 1000);
+      const [recent] = await tx
+        .select({ createdAt: emailOtpsTable.createdAt })
+        .from(emailOtpsTable)
+        .where(
+          and(
+            eq(emailOtpsTable.userId, user.id),
+            eq(emailOtpsTable.purpose, "reset_password"),
+            gt(emailOtpsTable.createdAt, cutoff),
+          ),
+        )
+        .orderBy(desc(emailOtpsTable.createdAt))
+        .limit(1);
+
+      if (recent) {
+        // Silently succeed — don't leak timing info
+        return;
+      }
+
+      // Invalidate any previous active reset OTPs
+      await tx
+        .update(emailOtpsTable)
+        .set({ used: true })
+        .where(
+          and(
+            eq(emailOtpsTable.userId, user.id),
+            eq(emailOtpsTable.purpose, "reset_password"),
+            eq(emailOtpsTable.used, false),
+          ),
+        );
+
+      const otp = generateOtp();
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+      await tx.insert(emailOtpsTable).values({
+        userId: user.id,
+        otp,
+        expiresAt,
+        purpose: "reset_password",
+      });
+
+      await sendPasswordResetEmail({ to: user.email, otp, fullName: user.fullName });
+    });
+  } catch (err) {
+    logger.error({ err }, "Failed to create/send password reset OTP");
+    // Still return 200 to avoid enumeration
+  }
+
+  res.json({ message: "If an account exists for that email, a reset code has been sent." });
+});
+
+// ─── POST /api/auth/reset-password ───────────────────────────────────────────
+
+router.post("/auth/reset-password", async (req, res): Promise<void> => {
+  const { email, otp, newPassword } = req.body as {
+    email?: string;
+    otp?: string;
+    newPassword?: string;
+  };
+
+  if (!email || !otp || !newPassword) {
+    res.status(400).json({ error: "email, otp, and newPassword are required" });
+    return;
+  }
+
+  if (otp.length !== 6 || !/^\d{6}$/.test(otp)) {
+    res.status(400).json({ error: "A 6-digit reset code is required" });
+    return;
+  }
+
+  if (newPassword.length < 8) {
+    res.status(400).json({ error: "Password must be at least 8 characters" });
+    return;
+  }
+
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.email, email.toLowerCase().trim()));
+
+  if (!user) {
+    res.status(400).json({ error: "Invalid or expired reset code. Please request a new one." });
+    return;
+  }
+
+  const now = new Date();
+
+  const [latestRef] = await db
+    .select({ id: emailOtpsTable.id, storedOtp: emailOtpsTable.otp })
+    .from(emailOtpsTable)
+    .where(
+      and(
+        eq(emailOtpsTable.userId, user.id),
+        eq(emailOtpsTable.purpose, "reset_password"),
+        eq(emailOtpsTable.used, false),
+        gt(emailOtpsTable.expiresAt, now),
+      ),
+    )
+    .orderBy(desc(emailOtpsTable.createdAt))
+    .limit(1);
+
+  if (!latestRef) {
+    res.status(400).json({ error: "Reset code has expired. Please request a new one." });
+    return;
+  }
+
+  // Atomically increment attempts, enforcing the cap
+  const [updated] = await db
+    .update(emailOtpsTable)
+    .set({ attempts: sql`${emailOtpsTable.attempts} + 1` })
+    .where(
+      and(
+        eq(emailOtpsTable.id, latestRef.id),
+        lt(emailOtpsTable.attempts, MAX_OTP_ATTEMPTS),
+      ),
+    )
+    .returning();
+
+  if (!updated) {
+    res.status(429).json({
+      error: "Too many incorrect attempts. Please request a new reset code.",
+    });
+    return;
+  }
+
+  if (latestRef.storedOtp !== otp) {
+    const remaining = MAX_OTP_ATTEMPTS - updated.attempts;
+    if (remaining <= 0) {
+      await db
+        .update(emailOtpsTable)
+        .set({ used: true })
+        .where(eq(emailOtpsTable.id, updated.id));
+      res.status(429).json({
+        error: "Too many incorrect attempts. Please request a new reset code.",
+      });
+    } else {
+      res.status(400).json({
+        error: `Incorrect reset code. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.`,
+      });
+    }
+    return;
+  }
+
+  // Correct code — update password and mark OTP used atomically
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(emailOtpsTable)
+      .set({ used: true })
+      .where(eq(emailOtpsTable.id, updated.id));
+
+    await tx
+      .update(usersTable)
+      .set({ passwordHash })
+      .where(eq(usersTable.id, user.id));
+  });
+
+  res.json({ message: "Password reset successfully. You can now sign in." });
 });
 
 export default router;

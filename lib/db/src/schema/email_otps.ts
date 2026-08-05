@@ -18,6 +18,8 @@ export const emailOtpsTable = pgTable("email_otps", {
   used: boolean("used").default(false).notNull(),
   /** Number of failed verification attempts against this OTP */
   attempts: integer("attempts").default(0).notNull(),
+  /** Purpose of the OTP: 'verify_email' or 'reset_password' */
+  purpose: text("purpose").default("verify_email").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

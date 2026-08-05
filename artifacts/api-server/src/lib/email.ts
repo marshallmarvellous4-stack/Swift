@@ -14,6 +14,12 @@ interface SendOtpOptions {
   fullName: string;
 }
 
+interface SendPasswordResetOptions {
+  to: string;
+  otp: string;
+  fullName: string;
+}
+
 /** Escape special HTML characters to prevent injection via user-controlled strings. */
 function escapeHtml(str: string): string {
   return str
@@ -30,6 +36,70 @@ function isSmtpConfigured(): boolean {
     process.env.SMTP_USER &&
     process.env.SMTP_PASS
   );
+}
+
+export async function sendPasswordResetEmail({
+  to,
+  otp,
+  fullName,
+}: SendPasswordResetOptions): Promise<void> {
+  const firstName = escapeHtml(fullName.split(" ")[0]);
+
+  if (!isSmtpConfigured()) {
+    console.log(
+      `\n🔑  [DEV] Password reset OTP for ${to}: ${otp}  (expires in 10 min)\n`,
+    );
+    return;
+  }
+
+  const nodemailer = await import("nodemailer");
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT ?? 587),
+    secure: Number(process.env.SMTP_PORT ?? 587) === 465,
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  });
+
+  const from = process.env.SMTP_FROM ?? `SwiftCare <noreply@swiftcare.app>`;
+
+  await transporter.sendMail({
+    from,
+    to,
+    subject: `Reset your SwiftCare password: ${otp}`,
+    text: [
+      `Hi ${fullName.split(" ")[0]},`,
+      ``,
+      `You requested a password reset for your SwiftCare account.`,
+      ``,
+      `Your reset code is:`,
+      ``,
+      `  ${otp}`,
+      ``,
+      `This code expires in 10 minutes.`,
+      ``,
+      `If you didn't request a password reset, you can safely ignore this email.`,
+    ].join("\n"),
+    html: `
+      <div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#fff;border-radius:12px;border:1px solid #e5e7eb">
+        <div style="text-align:center;margin-bottom:24px">
+          <span style="display:inline-block;background:#16A34A;color:#fff;font-size:18px;font-weight:700;padding:10px 20px;border-radius:8px">SwiftCare</span>
+        </div>
+        <h2 style="color:#111827;font-size:20px;margin-bottom:8px">Reset your password</h2>
+        <p style="color:#6B7280;font-size:14px;line-height:1.6;margin-bottom:24px">
+          Hi ${firstName}, enter the code below in the SwiftCare app to reset your password.
+        </p>
+        <div style="background:#FFF7ED;border:2px dashed #EA580C;border-radius:12px;padding:24px;text-align:center;margin-bottom:24px">
+          <span style="font-size:36px;font-weight:700;color:#EA580C;letter-spacing:8px">${otp}</span>
+        </div>
+        <p style="color:#9CA3AF;font-size:12px;text-align:center">
+          This code expires in <strong>10 minutes</strong>. If you didn't request a password reset, ignore this email.
+        </p>
+      </div>
+    `,
+  });
 }
 
 export async function sendOtpEmail({
