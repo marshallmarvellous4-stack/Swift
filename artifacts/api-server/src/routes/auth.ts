@@ -67,6 +67,10 @@ router.post("/auth/register", async (req, res): Promise<void> => {
 
   // Create OTP inside a transaction with an advisory lock so that even if
   // registration is called twice in a race the user has exactly one active OTP.
+  // Email is sent AFTER the transaction commits so an SMTP failure never rolls
+  // back the OTP row — the user can always request a resend.
+  let registrationOtp: string | null = null;
+
   try {
     await db.transaction(async (tx) => {
       // Advisory lock keyed by userId serializes concurrent OTP operations
@@ -80,17 +84,24 @@ router.post("/auth/register", async (req, res): Promise<void> => {
       const otp = generateOtp();
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
       await tx.insert(emailOtpsTable).values({ userId: user.id, otp, expiresAt });
-
-      // Send email after insert so rollback is possible if email throws
-      await sendOtpEmail({ to: user.email, otp, fullName: user.fullName });
+      registrationOtp = otp;
     });
   } catch (err) {
-    logger.error({ err }, "Failed to create/send OTP — rolling back user");
+    logger.error({ err }, "Failed to create OTP for new user — rolling back user");
     await db.delete(usersTable).where(eq(usersTable.id, user.id));
     res.status(500).json({
-      error: "Account created but we could not send a verification code. Please try registering again.",
+      error: "Account created but we could not prepare a verification code. Please try registering again.",
     });
     return;
+  }
+
+  // Send the verification email outside the transaction so SMTP failures don't
+  // destroy the OTP row.  On failure the user can log in and request a resend.
+  try {
+    await sendOtpEmail({ to: user.email, otp: registrationOtp!, fullName: user.fullName });
+  } catch (err) {
+    logger.error({ err }, "SMTP error sending registration OTP — user can request resend after login");
+    // Don't block registration; the user can resend from the verification screen.
   }
 
   const token = signToken({ userId: user.id, email: user.email, role: user.role });
@@ -374,7 +385,8 @@ router.post("/auth/resend-otp", requireAuth, async (req, res): Promise<void> => 
   // two calls from both passing the cooldown check and creating duplicate OTPs.
   let waitSeconds = 0;
   let alreadyVerified = false;
-  let sendError = false;
+  // Captured outside the transaction so we can email after commit
+  let resendPayload: { email: string; otp: string; fullName: string } | null = null;
 
   try {
     await db.transaction(async (tx) => {
@@ -411,23 +423,25 @@ router.post("/auth/resend-otp", requireAuth, async (req, res): Promise<void> => 
       const otp = generateOtp();
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
       await tx.insert(emailOtpsTable).values({ userId, otp, expiresAt });
-
-      try {
-        await sendOtpEmail({ to: user.email, otp, fullName: user.fullName });
-      } catch (err) {
-        logger.error({ err }, "Failed to send OTP email on resend");
-        sendError = true;
-        throw err; // roll back the insert
-      }
+      resendPayload = { email: user.email, otp, fullName: user.fullName };
     });
   } catch (err: unknown) {
     if ((err as { code?: string }).code === "not_found") {
       res.status(404).json({ error: "User not found" });
       return;
     }
-    if (!sendError) throw err;
-    res.status(500).json({ error: "Failed to send verification email. Please try again." });
-    return;
+    throw err;
+  }
+
+  // Send email OUTSIDE the transaction — SMTP failure no longer rolls back the OTP
+  if (resendPayload) {
+    try {
+      await sendOtpEmail(resendPayload);
+    } catch (err) {
+      logger.error({ err }, "SMTP error sending resend OTP");
+      res.status(500).json({ error: "Failed to send verification email. Please try again." });
+      return;
+    }
   }
 
   if (alreadyVerified) {
@@ -465,6 +479,9 @@ router.post("/auth/forgot-password", async (req, res): Promise<void> => {
     res.json({ message: "If an account exists for that email, a reset code has been sent." });
     return;
   }
+
+  // Captured outside the transaction so we can email after the OTP is committed
+  let resetOtp: string | null = null;
 
   try {
     await db.transaction(async (tx) => {
@@ -510,12 +527,23 @@ router.post("/auth/forgot-password", async (req, res): Promise<void> => {
         expiresAt,
         purpose: "reset_password",
       });
-
-      await sendPasswordResetEmail({ to: user.email, otp, fullName: user.fullName });
+      resetOtp = otp; // commit happens before email — OTP is always persisted
     });
   } catch (err) {
-    logger.error({ err }, "Failed to create/send password reset OTP");
+    logger.error({ err }, "Failed to create password reset OTP");
     // Still return 200 to avoid enumeration
+  }
+
+  // Send the email OUTSIDE the transaction — if SMTP fails the OTP row
+  // survives in the DB and the user can request another code after the cooldown.
+  if (resetOtp) {
+    try {
+      await sendPasswordResetEmail({ to: user.email, otp: resetOtp, fullName: user.fullName });
+    } catch (err) {
+      logger.error({ err }, "SMTP error sending password reset email");
+      // Return 200 to avoid enumeration — but the OTP is in the DB so a retry
+      // within the cooldown window will hit the cooldown, then work after it expires.
+    }
   }
 
   res.json({ message: "If an account exists for that email, a reset code has been sent." });
