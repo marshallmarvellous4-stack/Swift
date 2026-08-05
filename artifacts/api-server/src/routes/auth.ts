@@ -174,6 +174,21 @@ router.post("/auth/refresh", async (req, res): Promise<void> => {
     return;
   }
 
+  // Theft detected: a previously-rotated token was replayed.
+  // All sessions in the family have been revoked — force the client to log in again.
+  if ("stolen" in result) {
+    logger.warn(
+      { userId: result.userId },
+      "Refresh token reuse detected — all sessions revoked for user",
+    );
+    res.status(401).json({
+      error:
+        "This session has been invalidated for security reasons. Please log in again.",
+      code: "TOKEN_REUSE_DETECTED",
+    });
+    return;
+  }
+
   const [user] = await db
     .select()
     .from(usersTable)

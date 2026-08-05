@@ -105,15 +105,25 @@ export class ApiError extends Error {
   }
 }
 
+/** Discriminated result from attemptTokenRefresh */
+export type RefreshResult =
+  | { ok: true; token: string }
+  | { ok: false; code: "TOKEN_REUSE_DETECTED" | "SESSION_EXPIRED" | "NETWORK_ERROR" };
+
 /**
  * Called by apiFetch when a 401 is received.  Attempts to refresh the access
- * token using the stored refresh token.  Returns the new access token on
- * success, or null when the session cannot be recovered (caller should sign
- * the user out).
+ * token using the stored refresh token.
+ *
+ * Returns a discriminated result so callers can show a specific message:
+ *   - `{ ok: true, token }` — new access token ready
+ *   - `{ ok: false, code: "TOKEN_REUSE_DETECTED" }` — server detected a stolen
+ *     token replay; all sessions revoked, user must re-authenticate
+ *   - `{ ok: false, code: "SESSION_EXPIRED" }` — refresh token invalid/expired
+ *   - `{ ok: false, code: "NETWORK_ERROR" }` — could not reach server
  */
-export async function attemptTokenRefresh(): Promise<string | null> {
+export async function attemptTokenRefresh(): Promise<RefreshResult> {
   const storedRefresh = await getStoredRefreshToken();
-  if (!storedRefresh) return null;
+  if (!storedRefresh) return { ok: false, code: "SESSION_EXPIRED" };
 
   try {
     const response = await fetch(`${API_BASE}/auth/refresh`, {
@@ -122,10 +132,14 @@ export async function attemptTokenRefresh(): Promise<string | null> {
       body: JSON.stringify({ refreshToken: storedRefresh }),
     });
 
+    // Always wipe local tokens on failure — the session is gone either way
     if (!response.ok) {
-      // Refresh token is invalid/expired — wipe both tokens
       await clearAllTokens();
-      return null;
+      const body = await response.json().catch(() => ({})) as { code?: string };
+      if (body.code === "TOKEN_REUSE_DETECTED") {
+        return { ok: false, code: "TOKEN_REUSE_DETECTED" };
+      }
+      return { ok: false, code: "SESSION_EXPIRED" };
     }
 
     const data = (await response.json()) as {
@@ -135,9 +149,9 @@ export async function attemptTokenRefresh(): Promise<string | null> {
 
     await storeToken(data.token);
     await storeRefreshToken(data.refreshToken);
-    return data.token;
+    return { ok: true, token: data.token };
   } catch {
-    return null;
+    return { ok: false, code: "NETWORK_ERROR" };
   }
 }
 
@@ -191,14 +205,18 @@ export async function apiFetch<T>(
 
   // Auto-refresh: only when the caller supplied a token and refresh is allowed
   if (response.status === 401 && token && !skipRefresh) {
-    const newToken = await attemptTokenRefresh();
-    if (newToken) {
+    const refreshResult = await attemptTokenRefresh();
+    if (refreshResult.ok) {
       // Retry the original request with the fresh access token
-      response = await doFetch(newToken);
+      response = await doFetch(refreshResult.token);
     } else {
-      // Could not refresh — session is gone
+      // Could not refresh — session is gone; call back with a specific message
       onSessionExpired?.();
-      throw new ApiError("Session expired. Please log in again.", 401);
+      const msg =
+        refreshResult.code === "TOKEN_REUSE_DETECTED"
+          ? "Your session was invalidated for security reasons. Please log in again."
+          : "Session expired. Please log in again.";
+      throw new ApiError(msg, 401);
     }
   }
 
