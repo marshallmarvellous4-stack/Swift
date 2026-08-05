@@ -30,12 +30,20 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#x27;");
 }
 
+/** Trim all SMTP env vars — guards against accidental leading/trailing spaces when secrets are pasted. */
+function smtpConfig() {
+  return {
+    host: (process.env.SMTP_HOST ?? "").trim(),
+    port: Number((process.env.SMTP_PORT ?? "587").trim()),
+    user: (process.env.SMTP_USER ?? "").trim(),
+    pass: (process.env.SMTP_PASS ?? "").trim(),
+    from: (process.env.SMTP_FROM ?? "SwiftCare <noreply@swiftcare.app>").trim(),
+  };
+}
+
 function isSmtpConfigured(): boolean {
-  return !!(
-    process.env.SMTP_HOST &&
-    process.env.SMTP_USER &&
-    process.env.SMTP_PASS
-  );
+  const cfg = smtpConfig();
+  return !!(cfg.host && cfg.user && cfg.pass);
 }
 
 export async function sendPasswordResetEmail({
@@ -52,21 +60,17 @@ export async function sendPasswordResetEmail({
     return;
   }
 
+  const cfg = smtpConfig();
   const nodemailer = await import("nodemailer");
   const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT ?? 587),
-    secure: Number(process.env.SMTP_PORT ?? 587) === 465,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
+    host: cfg.host,
+    port: cfg.port,
+    secure: cfg.port === 465,
+    auth: { user: cfg.user, pass: cfg.pass },
   });
 
-  const from = process.env.SMTP_FROM ?? `SwiftCare <noreply@swiftcare.app>`;
-
   await transporter.sendMail({
-    from,
+    from: cfg.from,
     to,
     subject: `Reset your SwiftCare password: ${otp}`,
     text: [
@@ -117,23 +121,17 @@ export async function sendOtpEmail({
     return;
   }
 
-  // Lazy-load nodemailer only when SMTP is configured
+  const cfg = smtpConfig();
   const nodemailer = await import("nodemailer");
   const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT ?? 587),
-    secure: Number(process.env.SMTP_PORT ?? 587) === 465,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
+    host: cfg.host,
+    port: cfg.port,
+    secure: cfg.port === 465,
+    auth: { user: cfg.user, pass: cfg.pass },
   });
 
-  const from =
-    process.env.SMTP_FROM ?? `SwiftCare <noreply@swiftcare.app>`;
-
   await transporter.sendMail({
-    from,
+    from: cfg.from,
     to,
     subject: `Your SwiftCare verification code: ${otp}`,
     text: [

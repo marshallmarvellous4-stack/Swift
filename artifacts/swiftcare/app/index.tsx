@@ -17,13 +17,16 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
+import Svg, { Path } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const { width, height } = Dimensions.get("window");
 
-const CAROUSEL_HEIGHT = height * 0.62;
+const CAROUSEL_HEIGHT = height * 0.65;
 const SLIDE_DURATION = 4000;
 const FADE_DURATION = 700;
+// Height of the SVG wave that overlaps from the carousel into the green section
+const WAVE_H = 36;
 
 const SLIDES = [
   require("../assets/images/splash_pharmacy.jpg"),
@@ -83,15 +86,22 @@ export default function SplashScreen() {
         {/* dark overlay */}
         <View style={styles.overlay} />
 
-        {/* top inset spacer so status bar text stays clear */}
+        {/* top inset spacer */}
         <View style={{ height: insets.top + (Platform.OS === "web" ? 44 : 0) }} />
 
-        {/* text content inside carousel */}
+        {/* logo + text content centered in the carousel */}
         <Animated.View
           entering={FadeIn.delay(400).duration(700)}
           style={styles.carouselContent}
         >
-          <Text style={styles.taglineText}>Smarter Health Starts Here.</Text>
+          <Image
+            source={require("../assets/images/swiftcare_logo.png")}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+          <Text style={styles.taglineText}>
+            Smarter Health{"\n"}Starts Here.
+          </Text>
           <Text style={styles.subTagline}>Talk to a medical doctor</Text>
         </Animated.View>
 
@@ -104,9 +114,22 @@ export default function SplashScreen() {
             />
           ))}
         </View>
+
+        {/* SVG wave — sits at the very bottom of the carousel, bleeds into green */}
+        <Svg
+          width={width}
+          height={WAVE_H}
+          viewBox={`0 0 ${width} ${WAVE_H}`}
+          style={styles.wave}
+        >
+          <Path
+            d={`M0,${WAVE_H} C${width * 0.25},0 ${width * 0.75},0 ${width},${WAVE_H} L${width},${WAVE_H} L0,${WAVE_H} Z`}
+            fill="#16A34A"
+          />
+        </Svg>
       </View>
 
-      {/* ── BOTTOM DARK-GREEN SECTION ── */}
+      {/* ── BOTTOM GREEN SECTION ── */}
       <Animated.View
         entering={FadeInDown.delay(600).duration(600)}
         style={[
@@ -142,56 +165,60 @@ export default function SplashScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#15803D",
+    backgroundColor: "#16A34A",
   },
 
   /* ── Carousel ── */
   carouselSection: {
     width: "100%",
     overflow: "hidden",
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
     backgroundColor: "#1a1a1a",
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.45)",
+    backgroundColor: "rgba(0,0,0,0.42)",
   },
   carouselContent: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 32,
-    gap: 10,
+    gap: 0,
+  },
+  logo: {
+    width: 180,
+    height: 56,
+    marginBottom: 20,
   },
   taglineText: {
-    fontSize: 26,
+    fontSize: 34,
     fontWeight: "700" as const,
     color: "#FFFFFF",
     textAlign: "center",
     fontFamily: "Inter_700Bold",
-    letterSpacing: 0.3,
-    // RN native text shadow (cross-platform)
+    letterSpacing: -0.5,
+    lineHeight: 40,
+    marginBottom: 12,
     ...Platform.select({
       native: {
-        textShadowColor: "rgba(0,0,0,0.4)",
-        textShadowOffset: { width: 0, height: 1 },
-        textShadowRadius: 6,
+        textShadowColor: "rgba(0,0,0,0.45)",
+        textShadowOffset: { width: 0, height: 2 },
+        textShadowRadius: 12,
       },
       default: {},
     }),
   } as const,
   subTagline: {
-    fontSize: 15,
-    color: "rgba(255,255,255,0.85)",
+    fontSize: 18,
+    color: "rgba(255,255,255,0.90)",
     textAlign: "center",
     fontFamily: "Inter_400Regular",
-    lineHeight: 22,
+    lineHeight: 26,
     ...Platform.select({
       native: {
         textShadowColor: "rgba(0,0,0,0.35)",
         textShadowOffset: { width: 0, height: 1 },
-        textShadowRadius: 4,
+        textShadowRadius: 6,
       },
       default: {},
     }),
@@ -203,17 +230,24 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     gap: 7,
-    paddingBottom: 20,
+    paddingBottom: WAVE_H + 12,
   },
   dot: {
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: "rgba(255,255,255,0.35)",
+    backgroundColor: "rgba(255,255,255,0.40)",
   },
   dotActive: {
     backgroundColor: "#FFFFFF",
-    width: 20,
+    width: 22,
+  },
+
+  /* ── Wave ── */
+  wave: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
   },
 
   /* ── Bottom section ── */
@@ -223,31 +257,33 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     paddingHorizontal: 32,
     gap: 16,
+    backgroundColor: "#16A34A",
   },
   disclaimer: {
-    fontSize: 11,
+    fontSize: 12.5,
     color: "rgba(255,255,255,0.65)",
     textAlign: "center",
     fontFamily: "Inter_400Regular",
-    lineHeight: 16,
+    lineHeight: 19,
+    maxWidth: 300,
   },
   ctaButton: {
     backgroundColor: "#FFFFFF",
     borderRadius: 50,
     paddingVertical: 18,
     paddingHorizontal: 48,
-    width: "100%",
+    width: "85%",
     alignItems: "center",
     elevation: 6,
     ...Platform.select({
       native: {
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 12,
+        shadowOpacity: 0.18,
+        shadowRadius: 20,
       },
       web: {
-        boxShadow: "0px 4px 12px rgba(0,0,0,0.20)",
+        boxShadow: "0px 4px 20px rgba(0,0,0,0.18)",
       },
       default: {},
     }),
@@ -257,6 +293,6 @@ const styles = StyleSheet.create({
     fontWeight: "700" as const,
     color: "#16A34A",
     fontFamily: "Inter_700Bold",
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
 });
