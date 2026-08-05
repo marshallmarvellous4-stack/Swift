@@ -105,25 +105,28 @@ export class ApiError extends Error {
   }
 }
 
-/** Discriminated result from attemptTokenRefresh */
-export type RefreshResult =
-  | { ok: true; token: string }
-  | { ok: false; code: "TOKEN_REUSE_DETECTED" | "SESSION_EXPIRED" | "NETWORK_ERROR" };
+/**
+ * Thrown by attemptTokenRefresh when the server detects that a previously-
+ * revoked refresh token was presented (TOKEN_REUSE_DETECTED).  The caller
+ * should clear local state and show a "suspicious activity" warning.
+ */
+export class TokenReuseError extends Error {
+  constructor() {
+    super("Suspicious activity detected. Please sign in again.");
+    this.name = "TokenReuseError";
+  }
+}
 
 /**
  * Called by apiFetch when a 401 is received.  Attempts to refresh the access
- * token using the stored refresh token.
- *
- * Returns a discriminated result so callers can show a specific message:
- *   - `{ ok: true, token }` — new access token ready
- *   - `{ ok: false, code: "TOKEN_REUSE_DETECTED" }` — server detected a stolen
- *     token replay; all sessions revoked, user must re-authenticate
- *   - `{ ok: false, code: "SESSION_EXPIRED" }` — refresh token invalid/expired
- *   - `{ ok: false, code: "NETWORK_ERROR" }` — could not reach server
+ * token using the stored refresh token.  Returns the new access token on
+ * success, or null when the session cannot be recovered (caller should sign
+ * the user out).  Throws TokenReuseError when the server detects a stolen
+ * token replay so the caller can show a security-specific warning.
  */
-export async function attemptTokenRefresh(): Promise<RefreshResult> {
+export async function attemptTokenRefresh(): Promise<string | null> {
   const storedRefresh = await getStoredRefreshToken();
-  if (!storedRefresh) return { ok: false, code: "SESSION_EXPIRED" };
+  if (!storedRefresh) return null;
 
   try {
     const response = await fetch(`${API_BASE}/auth/refresh`, {
@@ -132,14 +135,25 @@ export async function attemptTokenRefresh(): Promise<RefreshResult> {
       body: JSON.stringify({ refreshToken: storedRefresh }),
     });
 
-    // Always wipe local tokens on failure — the session is gone either way
     if (!response.ok) {
+      // Always wipe local tokens on any refresh failure
       await clearAllTokens();
-      const body = await response.json().catch(() => ({})) as { code?: string };
-      if (body.code === "TOKEN_REUSE_DETECTED") {
-        return { ok: false, code: "TOKEN_REUSE_DETECTED" };
+
+      if (response.status === 401) {
+        // Check whether the server flagged a reuse attack
+        try {
+          const body = (await response.json()) as { code?: string };
+          if (body.code === "TOKEN_REUSE_DETECTED") {
+            // Signal the caller so it can show a security warning
+            throw new TokenReuseError();
+          }
+        } catch (inner) {
+          if (inner instanceof TokenReuseError) throw inner;
+          // JSON parse failed — fall through to plain null return
+        }
       }
-      return { ok: false, code: "SESSION_EXPIRED" };
+
+      return null;
     }
 
     const data = (await response.json()) as {
@@ -149,9 +163,10 @@ export async function attemptTokenRefresh(): Promise<RefreshResult> {
 
     await storeToken(data.token);
     await storeRefreshToken(data.refreshToken);
-    return { ok: true, token: data.token };
-  } catch {
-    return { ok: false, code: "NETWORK_ERROR" };
+    return data.token;
+  } catch (err) {
+    if (err instanceof TokenReuseError) throw err;
+    return null;
   }
 }
 
@@ -205,18 +220,16 @@ export async function apiFetch<T>(
 
   // Auto-refresh: only when the caller supplied a token and refresh is allowed
   if (response.status === 401 && token && !skipRefresh) {
-    const refreshResult = await attemptTokenRefresh();
-    if (refreshResult.ok) {
+    // attemptTokenRefresh may throw TokenReuseError — let that propagate so
+    // callers (and AuthContext) can show a suspicious-activity warning.
+    const newToken = await attemptTokenRefresh();
+    if (newToken) {
       // Retry the original request with the fresh access token
-      response = await doFetch(refreshResult.token);
+      response = await doFetch(newToken);
     } else {
-      // Could not refresh — session is gone; call back with a specific message
+      // Could not refresh — session is gone
       onSessionExpired?.();
-      const msg =
-        refreshResult.code === "TOKEN_REUSE_DETECTED"
-          ? "Your session was invalidated for security reasons. Please log in again."
-          : "Session expired. Please log in again.";
-      throw new ApiError(msg, 401);
+      throw new ApiError("Session expired. Please log in again.", 401);
     }
   }
 

@@ -1,27 +1,32 @@
 ---
 name: Refresh token design
-description: How the refresh token system is implemented across API server and mobile app
+description: How refresh tokens work — rotation, family tracking, concurrency-safe reuse detection.
 ---
 
 # Refresh token design
 
-Access tokens are short-lived (15 min JWTs). Refresh tokens are 96-char hex strings (48 random bytes) valid for 30 days. Only the SHA-256 hash is stored in `refresh_tokens` DB table.
+Access tokens are short-lived (15 min JWTs). Refresh tokens are 96-char hex strings valid for 30 days; only the SHA-256 hash is stored in the DB.
 
-**Why:** Short access token TTL limits blast radius of a leaked token. Storing only the hash means a DB breach doesn't expose usable tokens.
+**Why:** Short TTL limits blast radius of a leaked access token. Hash storage means a DB breach doesn't expose usable refresh tokens.
 
-## Token family / theft detection (Task #6)
+## Single-use rotation with token families
 
-Every token belongs to a `family` (UUID). When a login creates the first token the family is generated; every rotation passes the same family to the successor. If a **revoked** token is ever presented again (`rotateRefreshToken` sees it already has `revokedAt` set), the server immediately revokes every active token sharing that family and returns `{ stolen: true, userId }`. The `/auth/refresh` endpoint turns this into HTTP 401 with `code: "TOKEN_REUSE_DETECTED"`.
+Every token belongs to a family (UUID stored in `family_id`). On login/register a new UUID is generated; every rotation passes the same `familyId` to the successor token.
 
-**Why:** Single-use rotation alone doesn't detect theft — an attacker who rotates first keeps a valid chain while the real user gets 401. Family invalidation breaks the attacker's chain the moment the real user retries.
+## Concurrency-safe reuse detection
 
-**How to apply:**
-- `signToken` in `artifacts/api-server/src/middlewares/auth.ts` issues 15-min JWTs.
-- `createRefreshToken(userId, familyId?)` — omit `familyId` on new logins (auto-generates UUID); pass it on rotation.
-- `rotateRefreshToken(plain)` — returns `{ userId, newRefreshToken }` | `{ stolen: true, userId }` | `null`.
-- `/auth/refresh` route checks `"stolen" in result` and returns 401 + `TOKEN_REUSE_DETECTED` code.
-- `attemptTokenRefresh()` in mobile app returns a `RefreshResult` discriminated union (`ok: true/false` + `code`).
-- `apiFetch` shows "session invalidated for security reasons" vs plain "session expired" based on `code`.
-- Both tokens stored in SecureStore (native) / AsyncStorage (web) under `swiftcare_jwt` and `swiftcare_refresh_token`.
-- Drizzle-kit generate has a path bug when run from the package directory; create migration SQL files manually and update `lib/db/migrations/meta/_journal.json`.
-- `post-merge.sh` now runs `pnpm --filter @workspace/db run migrate` (not push-force) so all schema changes are tracked in `__drizzle_migrations`.
+`rotateRefreshToken` uses an atomic conditional UPDATE as its serialisation point:
+
+1. SELECT the row by hash (to distinguish "not found" from "revoked")
+2. If not found or expired → return `null` (no reuse implied)
+3. Inside a transaction: `UPDATE ... SET revoked_at = now WHERE id = ? AND revoked_at IS NULL RETURNING *`
+4. If 0 rows returned → we lost the race (or token was already revoked) → invalidate the entire family → return `{ reuseDetected: true }`
+5. If 1 row returned → we won → insert successor with the same `familyId` → return `{ userId, newRefreshToken }`
+
+**Why the atomic UPDATE matters:** Reading active status before the transaction is a TOCTOU gap — two concurrent requests can both observe `revokedAt IS NULL` and both enter the rotation path, issuing two live successors with no reuse signal. The conditional UPDATE eliminates the race: exactly one request can revoke any given row.
+
+## Error propagation
+
+- `/auth/refresh` returns HTTP 401 + `code: "TOKEN_REUSE_DETECTED"` when `reuseDetected` is in the result
+- `attemptTokenRefresh()` on the mobile client throws `TokenReuseError` when it sees that code
+- `AuthContext.tsx` sets `suspiciousActivity: boolean` state on `TokenReuseError`; the UI should surface a warning to the user (tracked as a follow-up task)

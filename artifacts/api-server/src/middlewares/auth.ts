@@ -1,7 +1,7 @@
 import { type NextFunction, type Request, type Response } from "express";
 import jwt from "jsonwebtoken";
 import { createHash, randomBytes, randomUUID } from "crypto";
-import { and, eq, gt, isNull, isNotNull } from "drizzle-orm";
+import { and, eq, gt, isNull } from "drizzle-orm";
 import { db, usersTable, refreshTokensTable } from "@workspace/db";
 
 export interface JwtPayload {
@@ -58,90 +58,93 @@ export async function createRefreshToken(
   const family = familyId ?? randomUUID();
   await db
     .insert(refreshTokensTable)
-    .values({ userId, tokenHash, expiresAt, family });
+    .values({ userId, tokenHash, expiresAt, familyId: family });
   return plain;
 }
 
 /**
- * Verify a refresh token and rotate it.
+ * Verify a refresh token and rotate it — concurrency-safe.
  *
  * Returns:
  *   - `{ userId, newRefreshToken }` on success (token was valid, now rotated)
- *   - `{ stolen: true, userId }` when a **revoked** token is presented again —
- *     this is the canonical signal of a stolen token being replayed; the
- *     function immediately revokes every active token in the entire family so
- *     the real owner is forced to re-authenticate
+ *   - `{ reuseDetected: true }` when the token is already revoked — the canonical
+ *     signal of a stolen/replayed token; the entire token family is immediately
+ *     invalidated so both the real owner and any attacker must re-authenticate
  *   - `null` when the token is simply unknown or expired (no theft implied)
+ *
+ * Concurrency safety: the revocation uses an atomic conditional UPDATE
+ * (`WHERE id = ? AND revoked_at IS NULL`) as the single serialisation point.
+ * Only one concurrent request can win; any loser sees 0 rows updated and is
+ * treated as a reuse event even if it presented a legitimately-issued token.
+ * This is intentional — simultaneous refreshes of the same token are
+ * indistinguishable from a replay attack.
  */
 export async function rotateRefreshToken(plain: string): Promise<
   | { userId: number; newRefreshToken: string }
-  | { stolen: true; userId: number }
+  | { reuseDetected: true }
   | null
 > {
   const tokenHash = hashToken(plain);
   const now = new Date();
 
-  // Fetch the row regardless of revocation status so we can detect reuse.
+  // Fetch the row by hash regardless of revocation status so we can tell
+  // "token doesn't exist" (return null) from "token is revoked" (reuse signal).
   const [row] = await db
     .select()
     .from(refreshTokensTable)
     .where(eq(refreshTokensTable.tokenHash, tokenHash));
 
-  // Token not in DB at all, or already expired — nothing suspicious, just invalid.
+  // Unknown or expired token — nothing suspicious, just invalid.
   if (!row || row.expiresAt <= now) return null;
 
-  // ── Theft detection ───────────────────────────────────────────────────────
-  // A revoked token being presented again means someone (likely an attacker)
-  // already rotated it.  Immediately invalidate every active token in the
-  // family so both the real owner and the attacker are locked out.
-  if (row.revokedAt !== null) {
-    if (row.family) {
-      await db
-        .update(refreshTokensTable)
-        .set({ revokedAt: now })
-        .where(
-          and(
-            eq(refreshTokensTable.family, row.family),
-            isNull(refreshTokensTable.revokedAt),
-          ),
-        );
-    } else {
-      // Legacy token without a family — revoke all active tokens for the user.
-      await db
-        .update(refreshTokensTable)
-        .set({ revokedAt: now })
-        .where(
-          and(
-            eq(refreshTokensTable.userId, row.userId),
-            isNull(refreshTokensTable.revokedAt),
-          ),
-        );
-    }
-    return { stolen: true, userId: row.userId };
-  }
-
-  // ── Normal rotation ───────────────────────────────────────────────────────
-  const newPlain = randomBytes(REFRESH_TOKEN_BYTES).toString("hex");
-  const newHash = hashToken(newPlain);
-  const expiresAt = new Date(
-    Date.now() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000,
-  );
-
-  await db.transaction(async (tx) => {
-    await tx
+  return db.transaction(async (tx) => {
+    // ── Atomic conditional revoke ────────────────────────────────────────────
+    // Only succeeds if revoked_at IS NULL.  Two concurrent requests on the
+    // same token will both enter here, but only one can UPDATE the row; the
+    // other sees 0 rows and falls through to the reuse-detection branch.
+    const [revoked] = await tx
       .update(refreshTokensTable)
       .set({ revokedAt: now })
-      .where(eq(refreshTokensTable.id, row.id));
+      .where(
+        and(
+          eq(refreshTokensTable.id, row.id),
+          isNull(refreshTokensTable.revokedAt),
+        ),
+      )
+      .returning();
+
+    if (!revoked) {
+      // We lost the race (or the token was already revoked before we arrived).
+      // Treat it as a potential theft: invalidate every remaining active token
+      // in the family so neither the real user nor any attacker can refresh.
+      await tx
+        .update(refreshTokensTable)
+        .set({ revokedAt: now })
+        .where(
+          and(
+            eq(refreshTokensTable.familyId, row.familyId),
+            isNull(refreshTokensTable.revokedAt),
+          ),
+        );
+      return { reuseDetected: true as const };
+    }
+
+    // ── Issue successor token ─────────────────────────────────────────────────
+    const newPlain = randomBytes(REFRESH_TOKEN_BYTES).toString("hex");
+    const newHash = hashToken(newPlain);
+    const expiresAt = new Date(
+      Date.now() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000,
+    );
 
     await tx.insert(refreshTokensTable).values({
-      userId: row.userId,
+      userId: revoked.userId,
       tokenHash: newHash,
       expiresAt,
-      family: row.family ?? undefined, // propagate family through the chain
+      familyId: revoked.familyId, // propagate family through the chain
     });
-  });
 
-  return { userId: row.userId, newRefreshToken: newPlain };
+    return { userId: revoked.userId, newRefreshToken: newPlain };
+  });
 }
 
 /**

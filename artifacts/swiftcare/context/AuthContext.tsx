@@ -12,6 +12,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import {
   ApiError,
+  TokenReuseError,
   apiFetch,
   attemptTokenRefresh,
   clearAllTokens,
@@ -54,6 +55,13 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
+  /**
+   * True when a token-reuse attack was detected and the session was
+   * forcibly invalidated.  The UI should surface a "suspicious activity
+   * detected" warning and then clear this flag (e.g. after the user
+   * acknowledges it by logging in again).
+   */
+  suspiciousActivity: boolean;
   login: (email: string, password: string) => Promise<AuthResult>;
   register: (data: RegisterData) => Promise<AuthResult>;
   logout: () => Promise<void>;
@@ -82,6 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [suspiciousActivity, setSuspiciousActivity] = useState(false);
 
   // Restore session from stored tokens on every app launch
   useEffect(() => {
@@ -108,7 +117,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // Attempt a silent refresh using the stored refresh token
+      // Attempt a silent refresh using the stored refresh token.
+      // attemptTokenRefresh throws TokenReuseError when the server detects
+      // a stolen / replayed token — caught below.
       const newToken = await attemptTokenRefresh();
       if (!newToken) return; // no refresh token or it's expired — stay logged out
 
@@ -118,8 +129,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       setUser(userData);
       setToken(newToken);
-    } catch {
-      // Unrecoverable — clear everything and stay logged out
+    } catch (err) {
+      // Token reuse detected — all family tokens are already invalidated on
+      // the server; show the security warning and stay logged out.
+      if (err instanceof TokenReuseError) {
+        setSuspiciousActivity(true);
+      }
+      // Unrecoverable either way — clear everything and stay logged out
       await clearAllTokens();
     } finally {
       setIsLoading(false);
@@ -127,11 +143,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   /** Force sign-out when a token refresh fails mid-session */
-  function handleSessionExpired(): void {
+  function handleSessionExpired(isReuse = false): void {
     void (async () => {
       await clearAllTokens();
       setToken(null);
       setUser(null);
+      if (isReuse) setSuspiciousActivity(true);
     })();
   }
 
@@ -204,6 +221,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(updatedUser);
       return { success: true };
     } catch (err) {
+      if (err instanceof TokenReuseError) {
+        handleSessionExpired(true);
+        return { success: false, error: err.message };
+      }
       const message =
         err instanceof ApiError
           ? err.message
@@ -221,6 +242,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       return { success: true };
     } catch (err) {
+      if (err instanceof TokenReuseError) {
+        handleSessionExpired(true);
+        return { success: false, error: err.message };
+      }
       const message =
         err instanceof ApiError
           ? err.message
@@ -248,11 +273,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await clearAllTokens();
     setToken(null);
     setUser(null);
+    setSuspiciousActivity(false); // user acknowledged by logging out
   }
 
   return (
     <AuthContext.Provider
-      value={{ user, token, isLoading, login, register, logout, verifyEmail, resendOtp }}
+      value={{ user, token, isLoading, suspiciousActivity, login, register, logout, verifyEmail, resendOtp }}
     >
       {children}
     </AuthContext.Provider>
