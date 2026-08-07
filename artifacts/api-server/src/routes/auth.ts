@@ -65,33 +65,9 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     })
     .returning();
 
-  // Create OTP inside a transaction with an advisory lock so that even if
-  // registration is called twice in a race the user has exactly one active OTP.
-  try {
-    await db.transaction(async (tx) => {
-      // Advisory lock keyed by userId serializes concurrent OTP operations
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(${user.id})`);
-
-      await tx
-        .update(emailOtpsTable)
-        .set({ used: true })
-        .where(and(eq(emailOtpsTable.userId, user.id), eq(emailOtpsTable.used, false)));
-
-      const otp = generateOtp();
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-      await tx.insert(emailOtpsTable).values({ userId: user.id, otp, expiresAt });
-
-      // Send email after insert so rollback is possible if email throws
-      await sendOtpEmail({ to: user.email, otp, fullName: user.fullName });
-    });
-  } catch (err) {
-    logger.error({ err }, "Failed to create/send OTP — rolling back user");
-    await db.delete(usersTable).where(eq(usersTable.id, user.id));
-    res.status(500).json({
-      error: "Account created but we could not send a verification code. Please try registering again.",
-    });
-    return;
-  }
+  // No OTP is sent at registration time. The verify-email screen prompts the
+  // user to request a code via POST /api/auth/resend-otp, which handles
+  // generation, cooldown, and delivery independently.
 
   const token = signToken({ userId: user.id, email: user.email, role: user.role });
   const refreshToken = await createRefreshToken(user.id);
