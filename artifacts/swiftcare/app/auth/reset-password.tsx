@@ -12,13 +12,19 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
-import { useColors } from "@/hooks/useColors";
 import { ApiError, apiFetch } from "@/utils/api";
 
+// ─── Design tokens ────────────────────────────────────────────────────────────
+const GREEN = "#16A34A";
+const GREEN_LIGHT = "#DCFCE7";
+const BG = "#F8F9FA";
+const HEADING = "#111827";
+const MUTED = "#6B7280";
+const BORDER = "#E5E7EB";
+const RED = "#DC2626";
 const OTP_LENGTH = 6;
 
 export default function ResetPasswordScreen() {
-  const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { email } = useLocalSearchParams<{ email: string }>();
@@ -128,9 +134,10 @@ export default function ResetPasswordScreen() {
     }
   }
 
+  // ── Success state ──────────────────────────────────────────────────────────
   if (success) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={styles.container}>
         <View
           style={[
             styles.successContainer,
@@ -140,25 +147,24 @@ export default function ResetPasswordScreen() {
             },
           ]}
         >
-          <View style={[styles.successIcon, { backgroundColor: colors.primary + "18" }]}>
-            <Ionicons name="checkmark-circle" size={56} color={colors.primary} />
+          <View style={styles.successIconCircle}>
+            <View style={styles.successIconInner}>
+              <Ionicons name="checkmark" size={36} color="#fff" />
+            </View>
           </View>
-          <Text style={[styles.successTitle, { color: colors.foreground }]}>
-            Password Reset!
-          </Text>
-          <Text style={[styles.successSub, { color: colors.mutedForeground }]}>
+          <Text style={styles.successTitle}>Password Reset!</Text>
+          <Text style={styles.successSub}>
             Your password has been updated. You can now sign in with your new password.
           </Text>
           <Pressable
             style={({ pressed }) => [
               styles.primaryBtn,
-              { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1, marginTop: 8 },
+              styles.primaryBtnActive,
+              { opacity: pressed ? 0.85 : 1, marginTop: 8 },
             ]}
             onPress={() => router.replace("/auth/login" as never)}
           >
-            <Text style={[styles.primaryBtnText, { color: "#fff" }]}>
-              Sign In
-            </Text>
+            <Text style={[styles.btnText, styles.btnTextActive]}>Sign In</Text>
           </Pressable>
         </View>
       </View>
@@ -167,7 +173,7 @@ export default function ResetPasswordScreen() {
 
   return (
     <KeyboardAwareScrollViewCompat
-      style={[styles.container, { backgroundColor: colors.background }]}
+      style={styles.container}
       contentContainerStyle={{
         paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0) + 16,
         paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 32,
@@ -178,26 +184,27 @@ export default function ResetPasswordScreen() {
         onPress={() => router.back()}
         style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.6 : 1 }]}
       >
-        <Ionicons name="arrow-back" size={24} color={colors.foreground} />
+        <Ionicons name="arrow-back" size={24} color={HEADING} />
       </Pressable>
 
+      {/* Header */}
       <View style={styles.topSection}>
-        <View style={[styles.iconWrap, { backgroundColor: colors.primary + "18" }]}>
-          <Ionicons name="lock-open-outline" size={36} color={colors.primary} />
+        <View style={styles.iconCircle}>
+          <View style={styles.iconInner}>
+            <Ionicons name="lock-open-outline" size={28} color="#fff" />
+          </View>
         </View>
-        <Text style={[styles.title, { color: colors.foreground }]}>Reset Password</Text>
-        <Text style={[styles.sub, { color: colors.mutedForeground }]}>
+        <Text style={styles.title}>Reset Password</Text>
+        <Text style={styles.sub}>
           Enter the 6-digit code sent to{"\n"}
-          <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold" }}>
-            {email ?? "your email"}
-          </Text>
+          <Text style={styles.emailHighlight}>{email ?? "your email"}</Text>
         </Text>
       </View>
 
       <View style={styles.form}>
-        {/* OTP inputs */}
+        {/* OTP row */}
         <View style={styles.fieldGroup}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Reset Code</Text>
+          <Text style={styles.label}>Reset Code</Text>
           <View style={styles.otpRow}>
             {otp.map((digit, i) => (
               <TextInput
@@ -205,15 +212,8 @@ export default function ResetPasswordScreen() {
                 ref={(el) => { inputRefs.current[i] = el; }}
                 style={[
                   styles.otpBox,
-                  {
-                    borderColor: digit
-                      ? colors.primary
-                      : errors.otp
-                      ? colors.destructive
-                      : colors.border,
-                    backgroundColor: colors.muted,
-                    color: colors.foreground,
-                  },
+                  digit && styles.otpBoxFilled,
+                  !!errors.otp && styles.otpBoxError,
                 ]}
                 value={digit}
                 onChangeText={(v) => handleOtpInput(v, i)}
@@ -227,30 +227,23 @@ export default function ResetPasswordScreen() {
             ))}
           </View>
           {errors.otp && (
-            <Text style={[styles.errorText, { color: colors.destructive }]}>
-              {errors.otp}
-            </Text>
+            <View style={styles.fieldError}>
+              <Ionicons name="alert-circle-outline" size={13} color={RED} />
+              <Text style={styles.fieldErrorText}>{errors.otp}</Text>
+            </View>
           )}
         </View>
 
         {/* New password */}
         <View style={styles.fieldGroup}>
-          <Text style={[styles.label, { color: colors.foreground }]}>New Password</Text>
-          <View
-            style={[
-              styles.inputWrap,
-              {
-                borderColor: errors.newPassword ? colors.destructive : colors.border,
-                backgroundColor: colors.muted,
-              },
-            ]}
-          >
-            <Ionicons name="lock-closed-outline" size={18} color={colors.mutedForeground} />
+          <Text style={styles.label}>New Password</Text>
+          <View style={[styles.inputWrap, errors.newPassword ? styles.inputWrapError : null]}>
+            <Ionicons name="lock-closed-outline" size={18} color={MUTED} />
             <TextInput
               ref={passwordRef}
-              style={[styles.input, { color: colors.foreground }]}
+              style={styles.input}
               placeholder="At least 8 characters"
-              placeholderTextColor={colors.mutedForeground}
+              placeholderTextColor={MUTED}
               value={newPassword}
               onChangeText={(v) => {
                 setNewPassword(v);
@@ -265,34 +258,27 @@ export default function ResetPasswordScreen() {
               <Ionicons
                 name={showPassword ? "eye-off-outline" : "eye-outline"}
                 size={18}
-                color={colors.mutedForeground}
+                color={MUTED}
               />
             </Pressable>
           </View>
           {errors.newPassword && (
-            <Text style={[styles.errorText, { color: colors.destructive }]}>
-              {errors.newPassword}
-            </Text>
+            <View style={styles.fieldError}>
+              <Ionicons name="alert-circle-outline" size={13} color={RED} />
+              <Text style={styles.fieldErrorText}>{errors.newPassword}</Text>
+            </View>
           )}
         </View>
 
         {/* Confirm password */}
         <View style={styles.fieldGroup}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Confirm Password</Text>
-          <View
-            style={[
-              styles.inputWrap,
-              {
-                borderColor: errors.confirmPassword ? colors.destructive : colors.border,
-                backgroundColor: colors.muted,
-              },
-            ]}
-          >
-            <Ionicons name="lock-closed-outline" size={18} color={colors.mutedForeground} />
+          <Text style={styles.label}>Confirm Password</Text>
+          <View style={[styles.inputWrap, errors.confirmPassword ? styles.inputWrapError : null]}>
+            <Ionicons name="lock-closed-outline" size={18} color={MUTED} />
             <TextInput
-              style={[styles.input, { color: colors.foreground }]}
+              style={styles.input}
               placeholder="Repeat new password"
-              placeholderTextColor={colors.mutedForeground}
+              placeholderTextColor={MUTED}
               value={confirmPassword}
               onChangeText={(v) => {
                 setConfirmPassword(v);
@@ -309,36 +295,36 @@ export default function ResetPasswordScreen() {
               <Ionicons
                 name={showConfirm ? "eye-off-outline" : "eye-outline"}
                 size={18}
-                color={colors.mutedForeground}
+                color={MUTED}
               />
             </Pressable>
           </View>
           {errors.confirmPassword && (
-            <Text style={[styles.errorText, { color: colors.destructive }]}>
-              {errors.confirmPassword}
-            </Text>
+            <View style={styles.fieldError}>
+              <Ionicons name="alert-circle-outline" size={13} color={RED} />
+              <Text style={styles.fieldErrorText}>{errors.confirmPassword}</Text>
+            </View>
           )}
         </View>
 
+        {/* Submit */}
         <Pressable
           style={({ pressed }) => [
             styles.primaryBtn,
-            {
-              backgroundColor: isLoading ? colors.muted : colors.primary,
-              opacity: pressed ? 0.85 : 1,
-            },
+            !isLoading && styles.primaryBtnActive,
+            { opacity: pressed && !isLoading ? 0.85 : 1 },
           ]}
           onPress={handleReset}
           disabled={isLoading}
         >
-          <Text
-            style={[
-              styles.primaryBtnText,
-              { color: isLoading ? colors.mutedForeground : "#fff" },
-            ]}
-          >
-            {isLoading ? "Resetting..." : "Reset Password"}
-          </Text>
+          {isLoading ? (
+            <View style={styles.loadingRow}>
+              <Ionicons name="reload-outline" size={18} color={MUTED} />
+              <Text style={[styles.btnText, styles.btnTextDisabled]}>Resetting…</Text>
+            </View>
+          ) : (
+            <Text style={[styles.btnText, styles.btnTextActive]}>Reset Password</Text>
+          )}
         </Pressable>
       </View>
     </KeyboardAwareScrollViewCompat>
@@ -346,85 +332,172 @@ export default function ResetPasswordScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  backBtn: { marginBottom: 24, alignSelf: "flex-start" },
+  container: {
+    flex: 1,
+    backgroundColor: BG,
+  },
+  backBtn: {
+    alignSelf: "flex-start",
+    marginBottom: 24,
+    padding: 4,
+  },
+
+  /* ── Header ── */
   topSection: {
     alignItems: "center",
-    marginBottom: 32,
+    marginBottom: 36,
     gap: 10,
   },
-  iconWrap: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  iconCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: GREEN_LIGHT,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 8,
+  },
+  iconInner: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: GREEN,
+    alignItems: "center",
+    justifyContent: "center",
   },
   title: {
     fontSize: 26,
     fontWeight: "700" as const,
     fontFamily: "Inter_700Bold",
+    color: HEADING,
   },
   sub: {
     fontSize: 14,
     fontFamily: "Inter_400Regular",
     textAlign: "center",
     lineHeight: 22,
+    color: MUTED,
     paddingHorizontal: 16,
   },
+  emailHighlight: {
+    color: GREEN,
+    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600" as const,
+  },
+
+  /* ── Form ── */
   form: { gap: 16 },
   fieldGroup: { gap: 6 },
   label: {
     fontSize: 14,
     fontWeight: "600" as const,
     fontFamily: "Inter_600SemiBold",
+    color: HEADING,
   },
+
+  /* ── OTP ── */
   otpRow: {
     flexDirection: "row",
-    gap: 8,
-    justifyContent: "space-between",
+    gap: 10,
+    justifyContent: "center",
   },
   otpBox: {
-    flex: 1,
-    aspectRatio: 1,
-    maxWidth: 52,
+    width: 48,
+    height: 58,
+    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1.5,
-    borderRadius: 12,
+    borderColor: BORDER,
     fontSize: 22,
-    fontWeight: "700" as const,
     fontFamily: "Inter_700Bold",
-  },
+    fontWeight: "700" as const,
+    color: HEADING,
+    ...Platform.select({
+      native: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.06,
+        shadowRadius: 4,
+      },
+      web: { boxShadow: "0 1px 4px rgba(0,0,0,0.06)" },
+      default: {},
+    }),
+  } as const,
+  otpBoxFilled: { borderColor: GREEN },
+  otpBoxError: { borderColor: RED },
+
+  /* ── Inputs ── */
   inputWrap: {
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1.5,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 13,
     gap: 10,
-  },
+    backgroundColor: "#FFFFFF",
+    borderColor: BORDER,
+    ...Platform.select({
+      native: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+      },
+      web: { boxShadow: "0 1px 3px rgba(0,0,0,0.05)" },
+      default: {},
+    }),
+  } as const,
+  inputWrapError: { borderColor: RED },
   input: {
     flex: 1,
     fontSize: 15,
     fontFamily: "Inter_400Regular",
+    color: HEADING,
   },
-  errorText: {
+  fieldError: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 2,
+  },
+  fieldErrorText: {
     fontSize: 12,
     fontFamily: "Inter_400Regular",
+    color: RED,
   },
+
+  /* ── Button ── */
   primaryBtn: {
-    paddingVertical: 16,
+    paddingVertical: 17,
     borderRadius: 50,
     alignItems: "center",
     marginTop: 8,
+    backgroundColor: "#E5E7EB",
   },
-  primaryBtnText: {
+  primaryBtnActive: {
+    backgroundColor: GREEN,
+    ...Platform.select({
+      native: {
+        shadowColor: GREEN,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+      },
+      web: { boxShadow: "0 4px 12px rgba(22,163,74,0.30)" },
+      default: {},
+    }),
+  } as const,
+  btnText: {
     fontSize: 16,
     fontWeight: "700" as const,
     fontFamily: "Inter_700Bold",
   },
-  // Success state
+  btnTextActive: { color: "#FFFFFF" },
+  btnTextDisabled: { color: MUTED },
+  loadingRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+
+  /* ── Success state ── */
   successContainer: {
     flex: 1,
     paddingHorizontal: 24,
@@ -432,24 +505,35 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 16,
   },
-  successIcon: {
+  successIconCircle: {
     width: 100,
     height: 100,
     borderRadius: 50,
+    backgroundColor: GREEN_LIGHT,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 8,
+  },
+  successIconInner: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: GREEN,
+    alignItems: "center",
+    justifyContent: "center",
   },
   successTitle: {
     fontSize: 26,
     fontWeight: "700" as const,
     fontFamily: "Inter_700Bold",
+    color: HEADING,
   },
   successSub: {
     fontSize: 14,
     fontFamily: "Inter_400Regular",
     textAlign: "center",
     lineHeight: 22,
+    color: MUTED,
     paddingHorizontal: 16,
   },
 });

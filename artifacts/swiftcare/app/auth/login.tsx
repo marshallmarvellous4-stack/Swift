@@ -14,10 +14,17 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useAuth } from "@/context/AuthContext";
-import { useColors } from "@/hooks/useColors";
+
+// ─── Design tokens ────────────────────────────────────────────────────────────
+const GREEN = "#16A34A";
+const GREEN_LIGHT = "#DCFCE7";
+const BG = "#F8F9FA";
+const HEADING = "#111827";
+const MUTED = "#6B7280";
+const BORDER = "#E5E7EB";
+const RED = "#DC2626";
 
 export default function LoginScreen() {
-  const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { login } = useAuth();
@@ -55,7 +62,7 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAwareScrollViewCompat
-      style={[styles.container, { backgroundColor: colors.background }]}
+      style={styles.container}
       contentContainerStyle={{
         paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0) + 16,
         paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 32,
@@ -66,36 +73,35 @@ export default function LoginScreen() {
         onPress={() => router.back()}
         style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.6 : 1 }]}
       >
-        <Ionicons name="arrow-back" size={24} color={colors.foreground} />
+        <Ionicons name="arrow-back" size={24} color={HEADING} />
       </Pressable>
 
+      {/* Header */}
       <View style={styles.topSection}>
-        <View style={[styles.iconWrap, { backgroundColor: colors.primary + "18" }]}>
-          <Ionicons name="medkit" size={36} color={colors.primary} />
+        <View style={styles.iconCircle}>
+          <View style={styles.iconInner}>
+            <Ionicons name="medkit" size={28} color="#fff" />
+          </View>
         </View>
-        <Text style={[styles.title, { color: colors.foreground }]}>Welcome Back</Text>
-        <Text style={[styles.sub, { color: colors.mutedForeground }]}>
-          Sign in to your SwiftCare account
-        </Text>
+        <Text style={styles.title}>Welcome Back</Text>
+        <Text style={styles.sub}>Sign in to your SwiftCare account</Text>
       </View>
 
       <View style={styles.form}>
+        {/* Email */}
         <View style={styles.fieldGroup}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Email</Text>
+          <Text style={styles.label}>Email</Text>
           <View
             style={[
               styles.inputWrap,
-              {
-                borderColor: errors.email ? colors.destructive : colors.border,
-                backgroundColor: colors.muted,
-              },
+              errors.email ? styles.inputWrapError : null,
             ]}
           >
-            <Ionicons name="mail-outline" size={18} color={colors.mutedForeground} />
+            <Ionicons name="mail-outline" size={18} color={MUTED} />
             <TextInput
-              style={[styles.input, { color: colors.foreground }]}
+              style={styles.input}
               placeholder="your@email.com"
-              placeholderTextColor={colors.mutedForeground}
+              placeholderTextColor={MUTED}
               value={email}
               onChangeText={(v) => {
                 setEmail(v);
@@ -107,28 +113,27 @@ export default function LoginScreen() {
             />
           </View>
           {errors.email && (
-            <Text style={[styles.errorText, { color: colors.destructive }]}>
-              {errors.email}
-            </Text>
+            <View style={styles.fieldError}>
+              <Ionicons name="alert-circle-outline" size={13} color={RED} />
+              <Text style={styles.fieldErrorText}>{errors.email}</Text>
+            </View>
           )}
         </View>
 
+        {/* Password */}
         <View style={styles.fieldGroup}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Password</Text>
+          <Text style={styles.label}>Password</Text>
           <View
             style={[
               styles.inputWrap,
-              {
-                borderColor: errors.password ? colors.destructive : colors.border,
-                backgroundColor: colors.muted,
-              },
+              errors.password ? styles.inputWrapError : null,
             ]}
           >
-            <Ionicons name="lock-closed-outline" size={18} color={colors.mutedForeground} />
+            <Ionicons name="lock-closed-outline" size={18} color={MUTED} />
             <TextInput
-              style={[styles.input, { color: colors.foreground }]}
+              style={styles.input}
               placeholder="Enter your password"
-              placeholderTextColor={colors.mutedForeground}
+              placeholderTextColor={MUTED}
               value={password}
               onChangeText={(v) => {
                 setPassword(v);
@@ -145,50 +150,51 @@ export default function LoginScreen() {
               <Ionicons
                 name={showPassword ? "eye-off-outline" : "eye-outline"}
                 size={18}
-                color={colors.mutedForeground}
+                color={MUTED}
               />
             </Pressable>
           </View>
           {errors.password && (
-            <Text style={[styles.errorText, { color: colors.destructive }]}>
-              {errors.password}
-            </Text>
+            <View style={styles.fieldError}>
+              <Ionicons name="alert-circle-outline" size={13} color={RED} />
+              <Text style={styles.fieldErrorText}>{errors.password}</Text>
+            </View>
           )}
         </View>
 
+        {/* Forgot password */}
         <Pressable
           style={({ pressed }) => [styles.forgotRow, { opacity: pressed ? 0.6 : 1 }]}
           onPress={() => router.push("/auth/forgot-password" as never)}
         >
-          <Text style={[styles.forgotLink, { color: colors.primary }]}>
-            Forgot password?
-          </Text>
+          <Text style={styles.forgotLink}>Forgot password?</Text>
         </Pressable>
 
+        {/* Sign In button */}
         <Pressable
           style={({ pressed }) => [
             styles.primaryBtn,
-            {
-              backgroundColor: isLoading ? colors.muted : colors.primary,
-              opacity: pressed ? 0.85 : 1,
-            },
+            !isLoading && styles.primaryBtnActive,
+            { opacity: pressed && !isLoading ? 0.85 : 1 },
           ]}
           onPress={handleLogin}
           disabled={isLoading}
         >
-          <Text style={[styles.primaryBtnText, { color: isLoading ? colors.mutedForeground : "#fff" }]}>
-            {isLoading ? "Signing In..." : "Sign In"}
-          </Text>
+          {isLoading ? (
+            <View style={styles.loadingRow}>
+              <Ionicons name="reload-outline" size={18} color={MUTED} />
+              <Text style={[styles.btnText, styles.btnTextDisabled]}>Signing In…</Text>
+            </View>
+          ) : (
+            <Text style={[styles.btnText, styles.btnTextActive]}>Sign In</Text>
+          )}
         </Pressable>
 
-        <View style={styles.registerRow}>
-          <Text style={[styles.registerText, { color: colors.mutedForeground }]}>
-            Don't have an account?
-          </Text>
+        {/* Register link */}
+        <View style={styles.switchRow}>
+          <Text style={styles.switchLabel}>Don't have an account? </Text>
           <Pressable onPress={() => router.replace("/auth/register" as never)}>
-            <Text style={[styles.registerLink, { color: colors.primary }]}>
-              Create account
-            </Text>
+            <Text style={styles.switchLink}>Create account</Text>
           </Pressable>
         </View>
       </View>
@@ -197,82 +203,104 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  backBtn: { marginBottom: 24, alignSelf: "flex-start" },
+  container: {
+    flex: 1,
+    backgroundColor: BG,
+  },
+  backBtn: {
+    alignSelf: "flex-start",
+    marginBottom: 24,
+    padding: 4,
+  },
+
+  /* ── Header ── */
   topSection: {
     alignItems: "center",
-    marginBottom: 32,
+    marginBottom: 36,
     gap: 10,
   },
-  iconWrap: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  iconCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: GREEN_LIGHT,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 8,
+  },
+  iconInner: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: GREEN,
+    alignItems: "center",
+    justifyContent: "center",
   },
   title: {
     fontSize: 26,
     fontWeight: "700" as const,
     fontFamily: "Inter_700Bold",
+    color: HEADING,
   },
   sub: {
     fontSize: 14,
     fontFamily: "Inter_400Regular",
+    color: MUTED,
     textAlign: "center",
   },
+
+  /* ── Form ── */
   form: { gap: 16 },
   fieldGroup: { gap: 6 },
   label: {
     fontSize: 14,
     fontWeight: "600" as const,
     fontFamily: "Inter_600SemiBold",
+    color: HEADING,
   },
   inputWrap: {
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1.5,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 13,
     gap: 10,
+    backgroundColor: "#FFFFFF",
+    borderColor: BORDER,
+    ...Platform.select({
+      native: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+      },
+      web: { boxShadow: "0 1px 3px rgba(0,0,0,0.05)" },
+      default: {},
+    }),
+  } as const,
+  inputWrapError: {
+    borderColor: RED,
   },
   input: {
     flex: 1,
     fontSize: 15,
     fontFamily: "Inter_400Regular",
+    color: HEADING,
   },
-  errorText: {
+  fieldError: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 2,
+  },
+  fieldErrorText: {
     fontSize: 12,
     fontFamily: "Inter_400Regular",
+    color: RED,
   },
-  primaryBtn: {
-    paddingVertical: 16,
-    borderRadius: 50,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  primaryBtnText: {
-    fontSize: 16,
-    fontWeight: "700" as const,
-    fontFamily: "Inter_700Bold",
-  },
-  registerRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 4,
-    marginTop: 8,
-  },
-  registerText: {
-    fontSize: 14,
-    fontFamily: "Inter_400Regular",
-  },
-  registerLink: {
-    fontSize: 14,
-    fontWeight: "600" as const,
-    fontFamily: "Inter_600SemiBold",
-  },
+
+  /* ── Forgot ── */
   forgotRow: {
     alignSelf: "flex-end",
     marginTop: -4,
@@ -281,5 +309,55 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600" as const,
     fontFamily: "Inter_600SemiBold",
+    color: GREEN,
+  },
+
+  /* ── Button ── */
+  primaryBtn: {
+    paddingVertical: 17,
+    borderRadius: 50,
+    alignItems: "center",
+    marginTop: 8,
+    backgroundColor: "#E5E7EB",
+  },
+  primaryBtnActive: {
+    backgroundColor: GREEN,
+    ...Platform.select({
+      native: {
+        shadowColor: GREEN,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+      },
+      web: { boxShadow: "0 4px 12px rgba(22,163,74,0.30)" },
+      default: {},
+    }),
+  } as const,
+  btnText: {
+    fontSize: 16,
+    fontWeight: "700" as const,
+    fontFamily: "Inter_700Bold",
+  },
+  btnTextActive: { color: "#FFFFFF" },
+  btnTextDisabled: { color: MUTED },
+  loadingRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+
+  /* ── Switch ── */
+  switchRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  switchLabel: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    color: MUTED,
+  },
+  switchLink: {
+    fontSize: 14,
+    fontWeight: "600" as const,
+    fontFamily: "Inter_600SemiBold",
+    color: GREEN,
   },
 });
